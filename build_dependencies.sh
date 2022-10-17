@@ -11,7 +11,7 @@ make
 sudo make install
 
 # build google test
-cd $PROj_HOME/googletest
+cd $PROj_HOME/deps/googletest
 mkdir build && cd build
 cmake ..
 make
