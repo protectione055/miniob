@@ -198,16 +198,20 @@ RC DefaultHandler::delete_record(Trx *trx, const char *dbname, const char *relat
   return table->delete_record(trx, &condition_filter, deleted_count);
 }
 
-RC DefaultHandler::update_record(Trx *trx, const char *dbname, const char *relation_name, const char *attribute_name,
-    const Value *value, int condition_num, const Condition *conditions, int *updated_count)
-{
-  Table *table = find_table(dbname, relation_name);
-  if (nullptr == table) {
-    return RC::SCHEMA_TABLE_NOT_EXIST;
-  }
+// PS: commented out by Miigon 2022-10-18
+// we do not wish to implement any operation with conditions
+// instead, use a predicate operator. 
+//
+// RC DefaultHandler::update_record(Trx *trx, const char *dbname, const char *relation_name, const char *attribute_name,
+//     const Value *value, int condition_num, const Condition *conditions, int *updated_count)
+// {
+//   Table *table = find_table(dbname, relation_name);
+//   if (nullptr == table) {
+//     return RC::SCHEMA_TABLE_NOT_EXIST;
+//   }
 
-  return table->update_record(trx, attribute_name, value, condition_num, conditions, updated_count);
-}
+//   return table->update_record(trx, attribute_name, value, condition_num, conditions, updated_count);
+// }
 
 Db *DefaultHandler::find_db(const char *dbname) const
 {
