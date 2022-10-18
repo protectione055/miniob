@@ -3,5 +3,5 @@
 
 cd build
 cmake .. -DDEBUG=ON
-make -j && make install -j
+make clean && make -j && make install -j
 cd ..
