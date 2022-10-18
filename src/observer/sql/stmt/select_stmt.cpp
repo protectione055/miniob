@@ -27,6 +27,7 @@ SelectStmt::~SelectStmt()
   }
 }
 
+// 处理select通配符*，将隐藏field以外的field添加到field_metas
 static void wildcard_fields(Table *table, std::vector<Field> &field_metas)
 {
   const TableMeta &table_meta = table->table_meta();

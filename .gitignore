@@ -16,4 +16,7 @@ compile_commands.json
 GRTAGS
 GPATH
 GTAGS
+observer.log.*
+src/observer/miniob/
+./deps/*
 #*#
