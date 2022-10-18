@@ -120,6 +120,33 @@ RC Table::create(
   return rc;
 }
 
+RC Table::drop(const char *path)
+{
+  RC rc = RC::SUCCESS;
+  //删除索引
+  for(Index *index : indexes_){
+    index->drop();
+  }
+  //删除record handler
+  record_handler_->close();
+  delete record_handler_;
+  record_handler_ = nullptr;
+
+  //删除对应的buffer
+  std::string data_file = table_data_file(base_dir_.c_str(), name());
+  BufferPoolManager &bpm = BufferPoolManager::instance();
+  rc = bpm.remove_file(data_file.c_str());
+
+  //删除元数据文件
+  int remove_ret = ::remove(path);
+  if(remove_ret!=0)
+  {
+    LOG_ERROR("Could not remove meta file %s", path);
+    return RC::FILE_ERROR;
+  }
+  return rc;
+}
+
 RC Table::open(const char *meta_file, const char *base_dir, CLogManager *clog_manager)
 {
   // 加载元数据文件
