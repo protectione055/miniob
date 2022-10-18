@@ -1,9 +1,7 @@
 #!/bin/bash
 # build miniob
 
-PROj_HOME=`pwd`
-
-cd $PROj_HOME
-mkdir -p build && cd build
+cd build
 cmake .. -DDEBUG=ON
-make $@
+make -j && make install -j
+cd ..
