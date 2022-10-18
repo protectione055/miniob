@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <string>
 #include <sstream>
+#include <regex>
 
 #include "execute_stage.h"
 
@@ -424,8 +425,8 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   pred_oper.add_child(scan_oper);
   ProjectOperator project_oper;
   project_oper.add_child(&pred_oper);
+  // add aggregation support
   for (const Field &field : select_stmt->query_fields()) {
-
     project_oper.add_projection(field.table(), field.meta());
   }
   rc = project_oper.open();
