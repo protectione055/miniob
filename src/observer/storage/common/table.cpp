@@ -122,7 +122,7 @@ RC Table::create(
 
 RC Table::drop(const char *path)
 {
-  RC rc = RC::SUCCESS;
+  RC rc = sync();
   //删除索引
   for(Index *index : indexes_){
     index->drop();
