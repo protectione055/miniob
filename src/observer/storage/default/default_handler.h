@@ -138,8 +138,12 @@ public:
    * 如果要更新一个被索引的属性，应当先删除每个被更新元组对应的索引条目，然后插入一个新的索引条目
    * @return
    */
-  RC update_record(Trx *trx, const char *dbname, const char *relation_name, const char *attribute_name,
-      const Value *value, int condition_num, const Condition *conditions, int *updated_count);
+  // PS: commented out by Miigon 2022-10-18
+  // we do not wish to implement any operation with conditions
+  // instead, use a predicate operator. 
+  // 
+  //RC update_record(Trx *trx, const char *dbname, const char *relation_name, const char *attribute_name,
+  //    const Value *value, int condition_num, const Condition *conditions, int *updated_count);
 
 public:
   Db *find_db(const char *dbname) const;
