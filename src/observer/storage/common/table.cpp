@@ -29,6 +29,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/index/bplus_tree_index.h"
 #include "storage/trx/trx.h"
 #include "storage/clog/clog.h"
+#include "sql/expr/tuple.h"
 
 Table::~Table()
 {
@@ -665,10 +666,95 @@ RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_n
   return rc;
 }
 
-RC Table::update_record(Trx *trx, const char *attribute_name, const Value *value, int condition_num,
-    const Condition conditions[], int *updated_count)
+RC Table::update_record(Trx *trx, Record *record, const char *attribute_name, const Value *value)
 {
-  return RC::GENERIC_ERROR;
+  RC rc = RC::SUCCESS;
+  
+  // build record with modified data
+  RowTuple tuple;
+  tuple.set_schema(this, table_meta().field_metas());
+  tuple.set_record(record);
+  TupleCell cell;
+  const TupleCellSpec *spec;
+  // skip over sys_fields
+  int num_sys_fields = table_meta_.sys_field_num();
+  int num_values = tuple.cell_num() - num_sys_fields;
+  Value *values = new Value[num_values];
+  for (int i = num_sys_fields; i < tuple.cell_num(); i++) { 
+    rc = tuple.cell_at(i, cell);
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("failed to fetch field of cell. index=%d, rc=%s", i, strrc(rc));
+      return rc;
+    }
+    rc = tuple.cell_spec_at(i, spec);
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("failed to fetch spec of cell. index=%d, rc=%s", i, strrc(rc));
+      return rc;
+    }
+    // does not check rc since it's not expected for anything to fail
+    const FieldExpr * field_expr = (const FieldExpr *)spec->expression();
+    const Field &field = field_expr->field();
+    if (strcmp(attribute_name, field.field_name()) == 0) {
+      // is the field we want to update
+      values[i - num_sys_fields] = *value;
+    } else {
+      values[i - num_sys_fields] = Value{cell.attr_type(), (void*)cell.data()};
+    }
+  }
+  char *new_record_data = nullptr;
+  rc = make_record(num_values, values, new_record_data); // implicit copy of values assumed
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to rebuild record data in update (rid=%d.%d). rc=%d:%s",
+            record->rid().page_num, record->rid().slot_num, rc, strrc(rc));
+    return rc;
+  }
+  delete[] values;
+
+  // delete old index for record
+  rc = delete_entry_of_indexes(record->data(), record->rid(), false);  // 重复代码 refer to commit_delete
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to delete indexes of record for update (rid=%d.%d). rc=%d:%s",
+                record->rid().page_num, record->rid().slot_num, rc, strrc(rc));
+    return rc;
+  }
+
+  // use new data
+  record->set_data(new_record_data);
+
+  // insert new index for record
+  rc = insert_entry_of_indexes(record->data(), record->rid());
+  if (rc != RC::SUCCESS) {
+    // TODO should probably rollback (insert the original index back)  
+    // i did't do it here, basically we are screwed if the insert_entry_of_indexes failed
+    LOG_ERROR("Failed to reinsert indexes of record for update (rid=%d.%d). rc=%d:%s",
+                record->rid().page_num, record->rid().slot_num, rc, strrc(rc));
+    return rc;
+  }
+  
+  // update record row
+  rc = record_handler_->update_record(record);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to update record (rid=%d.%d). rc=%d:%s",
+                record->rid().page_num, record->rid().slot_num, rc, strrc(rc));
+    return rc;
+  }
+
+  if (trx != nullptr) {
+    rc = trx->update_record(this, record);
+    
+    CLogRecord *clog_record = nullptr;
+    rc = clog_manager_->clog_gen_record(CLogType::REDO_UPDATE, trx->get_current_id(), clog_record, name(), 0, record);
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to create a clog record. rc=%d:%s", rc, strrc(rc));
+      return rc;
+    }
+    rc = clog_manager_->clog_append_record(clog_record);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+  }
+
+  return rc;
 }
 
 class RecordDeleter {
