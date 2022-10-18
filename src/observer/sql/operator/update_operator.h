@@ -9,37 +9,36 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 //
-// Created by Wangyunlai on 2022/5/22.
+// Created by WangYunlai on 2022/6/9.
 //
 
 #pragma once
 
+#include "sql/operator/operator.h"
 #include "rc.h"
-#include "sql/stmt/stmt.h"
 
-class Table;
-class FilterStmt;
+class Trx;
+class UpdateStmt;
 
-class UpdateStmt : public Stmt
+class UpdateOperator : public Operator
 {
 public:
+  UpdateOperator(UpdateStmt *update_stmt, Trx *trx)
+    : update_stmt_(update_stmt), trx_(trx)
+  {}
 
-  UpdateStmt() = default;
+  virtual ~UpdateOperator() = default;
 
-  StmtType type() const override { return StmtType::UPDATE; }
-public:
-  static RC create(Db *db, const Updates &update_sql, Stmt *&stmt);
+  RC open() override;
+  RC next() override;
+  RC close() override;
 
-public:
-  Table *table() const {return table_;}
-  const char *attribute() { return attribute_name_; }
-  const Value *value() const { return &value_; }
-  FilterStmt *filter_stmt() const { return filter_stmt_; }
-
+  Tuple * current_tuple() override {
+    return nullptr;
+  }
+  //int tuple_cell_num() const override
+  //RC tuple_cell_spec_at(int index, TupleCellSpec &spec) const override
 private:
-  Table *table_ = nullptr;
-  const char *attribute_name_ = nullptr;
-  Value value_;
-  FilterStmt *filter_stmt_ = nullptr;
+  UpdateStmt *update_stmt_ = nullptr;
+  Trx *trx_ = nullptr;
 };
-
