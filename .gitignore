@@ -19,4 +19,5 @@ GTAGS
 observer.log.*
 src/observer/miniob/
 ./deps/*
+test/case/miniob/
 #*#
