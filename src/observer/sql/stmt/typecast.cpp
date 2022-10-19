@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include "sql/stmt/typecast.h"
 
 RC cast_string_to_date(Value *dest, void *data)
@@ -29,10 +30,112 @@ RC cast_string_to_date(Value *dest, void *data)
   return RC::SUCCESS;
 }
 
+RC cast_string_to_int(Value *dest, void *data)
+{
+  int res;
+  if(sscanf((char*)data, "%d", &res) == 0) {
+    return RC::MISMATCH;
+  }
+  dest->type = INTS;
+  dest->data = malloc(sizeof(int));
+  (*(int*)dest->data) = res;
+  return RC::SUCCESS;
+}
+
+RC cast_string_to_float(Value *dest, void *data)
+{
+  float res;
+  if(sscanf((char*)data, "%f", &res) == 0) {
+    return RC::MISMATCH;
+  }
+  dest->type = FLOATS;
+  dest->data = malloc(sizeof(float));
+  (*(float*)dest->data) = res;
+  return RC::SUCCESS;
+}
+
+RC cast_int_to_string(Value *dest, void *data)
+{
+  char *res = (char*)malloc(32);
+  sprintf(res, "%d", *(int*)data);
+  dest->type = CHARS;
+  dest->data = res;
+  return RC::SUCCESS;
+}
+
+RC cast_float_to_string(Value *dest, void *data)
+{
+  char *res = (char*)malloc(32);
+  sprintf(res, "%f", *(float*)data);
+  dest->type = CHARS;
+  dest->data = res;
+  return RC::SUCCESS;
+}
+
+RC cast_int_to_float(Value *dest, void *data)
+{
+  dest->type = FLOATS;
+  dest->data = malloc(sizeof(float));
+  (*(float*)dest->data) = *(int*)data;
+  return RC::SUCCESS;
+}
+
+RC cast_float_to_int(Value *dest, void *data)
+{
+  dest->type = INTS;
+  dest->data = malloc(sizeof(int));
+  (*(int*)dest->data) = lround(*(float*)data);
+  return RC::SUCCESS;
+}
+
+
 RC try_typecast(Value *dest, Value source, AttrType target) {
   if(source.type == CHARS && target == DATES) {
-	cast_string_to_date(dest, source.data);
+    cast_string_to_date(dest, source.data);
+  } else if(source.type == CHARS && target == INTS) {
+    cast_string_to_int(dest, source.data);
+  } else if(source.type == CHARS && target == FLOATS) {
+    cast_string_to_float(dest, source.data);
+  } else if(source.type == INTS && target == CHARS) {
+    cast_int_to_string(dest, source.data);
+  } else if(source.type == FLOATS && target == CHARS) {
+    cast_float_to_string(dest, source.data);
+  } else if(source.type == INTS && target == FLOATS) {
+    cast_int_to_float(dest, source.data);
+  } else if(source.type == FLOATS && target == INTS) {
+    cast_float_to_int(dest, source.data);
   } else {
-	return RC::MISMATCH;
+  return RC::MISMATCH;
   }
+}
+
+RC try_typecast_bidirection(Value *dest, Value source0, Value source1, int *which_casted) {
+  RC rc = RC::SUCCESS;
+  if(source0.type == INTS && source1.type == FLOATS) {
+    rc = cast_int_to_float(dest, source0.data);
+    *which_casted = 0;
+  } else if(source0.type == FLOATS && source1.type == INTS) {
+    rc = cast_int_to_float(dest, source1.data);
+    *which_casted = 1;
+  } else if(source0.type == CHARS && source1.type == FLOATS) {
+    rc = cast_string_to_float(dest, source0.data);
+    *which_casted = 0;
+  } else if(source0.type == FLOATS && source1.type == CHARS) {
+    rc = cast_string_to_float(dest, source1.data);
+    *which_casted = 1;
+  } else {
+    rc = try_typecast(dest, source0, source1.type);
+    if(rc == RC::SUCCESS) {
+      *which_casted = 0;
+      goto done;
+    }
+    rc = try_typecast(dest, source1, source0.type);
+    if(rc == RC::SUCCESS) {
+      *which_casted = 1;
+      goto done;
+    }
+    rc = RC::MISMATCH;
+  }
+  done:
+  return rc;
 }
