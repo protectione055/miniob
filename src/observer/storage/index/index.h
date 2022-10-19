@@ -48,17 +48,17 @@ public:
   virtual RC insert_entry(const char *record, const RID *rid) = 0;
   virtual RC delete_entry(const char *record, const RID *rid) = 0;
 
-  virtual IndexScanner *create_scanner(const char *left_key, int left_len, bool left_inclusive,
-				       const char *right_key, int right_len, bool right_inclusive) = 0;
+  virtual IndexScanner *create_scanner(const char *left_keys[], const int left_lens[], bool left_inclusive,
+				       const char *right_keys[], const int right_lens[], bool right_inclusive) = 0;
 
   virtual RC sync() = 0;
 
 protected:
-  RC init(const IndexMeta &index_meta, const FieldMeta &field_meta);
+  RC init(const IndexMeta &index_meta, const std::vector<const FieldMeta*> &field_metas);
 
 protected:
   IndexMeta index_meta_;
-  FieldMeta field_meta_;  /// 当前实现仅考虑一个字段的索引
+  std::vector<const FieldMeta*> field_metas_;
 };
 
 class IndexScanner {

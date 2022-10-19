@@ -15,19 +15,13 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/index_scan_operator.h"
 #include "storage/index/index.h"
 
-IndexScanOperator::IndexScanOperator(const Table *table, Index *index,
-		const TupleCell *left_cell, bool left_inclusive,
-		const TupleCell *right_cell, bool right_inclusive)
+IndexScanOperator::IndexScanOperator(const Table *table, const Index *index,
+		    const std::vector<TupleCell> &left_cells, bool left_inclusive,
+		    const std::vector<TupleCell> &right_cells, bool right_inclusive)
   : table_(table), index_(index),
-    left_inclusive_(left_inclusive), right_inclusive_(right_inclusive)
-{
-  if (left_cell) {
-    left_cell_ = *left_cell;
-  }
-  if (right_cell) {
-    right_cell_ = *right_cell;
-  }
-}
+    left_inclusive_(left_inclusive), right_inclusive_(right_inclusive),
+    left_cells_(left_cells), right_cells_(right_cells)
+{}
 
 RC IndexScanOperator::open()
 {
@@ -35,9 +29,28 @@ RC IndexScanOperator::open()
     return RC::INTERNAL;
   }
 
+  const char **left_keys = nullptr, **right_keys = nullptr;
+  int *left_lens = nullptr, *right_lens = nullptr;
+  // ugly duplicate code snippet
+  if(left_cells_.size() >= 0) {
+    left_keys = new const char*[left_cells_.size()];
+    left_lens = new int[left_cells_.size()];
+    for(int i=0;i<left_cells_.size();i++) {
+      left_keys[i] = const_cast<char*>(left_cells_[i].data());
+      left_lens[i] = left_cells_[i].length();
+    }
+  }
+  if(right_cells_.size() >= 0) {
+    right_keys = new const char*[right_cells_.size()];
+    right_lens = new int[right_cells_.size()];
+    for(int i=0;i<right_cells_.size();i++) {
+      right_keys[i] = const_cast<char*>(right_cells_[i].data());
+      right_lens[i] = right_cells_[i].length();
+    }
+  }
   
-  IndexScanner *index_scanner = index_->create_scanner(left_cell_.data(), left_cell_.length(), left_inclusive_,
-                                                       right_cell_.data(), right_cell_.length(), right_inclusive_);
+  IndexScanner *index_scanner = const_cast<Index*>(index_)->create_scanner(left_keys, left_lens , left_inclusive_,
+                                                       right_keys, right_lens, right_inclusive_);
   if (nullptr == index_scanner) {
     LOG_WARN("failed to create index scanner");
     return RC::INTERNAL;

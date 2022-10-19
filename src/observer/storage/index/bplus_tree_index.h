@@ -23,8 +23,8 @@ public:
   BplusTreeIndex() = default;
   virtual ~BplusTreeIndex() noexcept;
 
-  RC create(const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta);
-  RC open(const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta);
+  RC create(const char *file_name, const IndexMeta &index_meta, const std::vector<const FieldMeta*> &field_metas);
+  RC open(const char *file_name, const IndexMeta &index_meta, const std::vector<const FieldMeta*> &field_metas);
   RC drop() override;
   RC close();
 
@@ -34,14 +34,16 @@ public:
   /**
    * 扫描指定范围的数据
    */
-  IndexScanner *create_scanner(const char *left_key, int left_len, bool left_inclusive,
-			       const char *right_key, int right_len, bool right_inclusive) override;
+  IndexScanner *create_scanner(const char *left_keys[], const int left_lens[], bool left_inclusive,
+			       const char *right_keys[], const int right_lens[], bool right_inclusive) override;
 
   RC sync() override;
 
 private:
   bool inited_ = false;
   BplusTreeHandler index_handler_;
+
+  const char **generate_keys_from_record(const char *record);
 };
 
 class BplusTreeIndexScanner : public IndexScanner {
@@ -52,8 +54,8 @@ public:
   RC next_entry(RID *rid) override;
   RC destroy() override;
 
-  RC open(const char *left_key, int left_len, bool left_inclusive,
-          const char *right_key, int right_len, bool right_inclusive);
+  RC open(const char *left_keys[], const int left_lens[], bool left_inclusive,
+          const char *right_keys[], const int right_lens[], bool right_inclusive);
 private:
   BplusTreeScanner tree_scanner_;
 };

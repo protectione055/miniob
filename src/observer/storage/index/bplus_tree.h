@@ -33,48 +33,68 @@ See the Mulan PSL v2 for more details. */
 class AttrComparator
 {
 public:
-  void init(AttrType type, int length)
+  void init(const AttrType types[], const int lengths[], int num_attrs)
   {
-    attr_type_ = type;
-    attr_length_ = length;
+    attr_types_ = types;
+    attr_lengths_ = lengths;
+
+    int attr_length_total = 0;
+    for(int i=0;i<num_attrs;i++) {
+      attr_length_total += lengths[i];
+    }
+    attr_length_total_ = attr_length_total;
+    num_attrs_ = num_attrs;
   }
 
-  int attr_length() const {
-    return attr_length_;
+  int attr_length_total() const {
+    return attr_length_total_;
   }
 
   int operator()(const char *v1, const char *v2) const {
-    switch (attr_type_) {
-    case INTS: {
-      return compare_int((void *)v1, (void *)v2);
+    int offset = 0;
+    for(int i=0;i<num_attrs_;i++) {
+      int res = compare_col_id(i, v1 + offset, v2 + offset);
+      if(res != 0) return res;
+      offset += attr_lengths_[i];
     }
-      break;
-    case FLOATS: {
-      return compare_float((void *)v1, (void *)v2);
-    }
-    case CHARS: {
-      return compare_string((void *)v1, attr_length_, (void *)v2, attr_length_);
-    }
-    case DATES: {
-      return compare_time((void *)v1, (void *)v2);
-    }
-    default:{
-      LOG_ERROR("unknown attr type. %d", attr_type_);
-      abort();
-    }
-    }
+    // all fields equal
+    return 0;
   }
 private:
-  AttrType attr_type_;
-  int attr_length_;
+  const AttrType *attr_types_;
+  const int *attr_lengths_;
+  int num_attrs_;
+  int attr_length_total_;
+
+  int compare_col_id(int i, const char *v1, const char *v2) const {
+    switch (attr_types_[i]) {
+      case INTS: {
+        return compare_int((void *)v1, (void *)v2);
+      }
+        break;
+      case FLOATS: {
+        return compare_float((void *)v1, (void *)v2);
+      }
+      case CHARS: {
+        return compare_string((void *)v1, attr_lengths_[i], (void *)v2, attr_lengths_[i]);
+      }
+      case DATES: {
+        return compare_time((void *)v1, (void *)v2);
+      }
+      default:{
+        LOG_ERROR("unknown attr type. %d", attr_types_[i]);
+        abort();
+      }
+    }
+  }
 };
 
 class KeyComparator
 {
 public:
-  void init(AttrType type, int length)
+  void init(const AttrType types[], const int lengths[], int num_attrs)
   {
-    attr_comparator_.init(type, length);
+    attr_comparator_.init(types, lengths, num_attrs);
   }
 
   const AttrComparator &attr_comparator() const {
@@ -87,8 +107,8 @@ public:
       return result;
     }
 
-    const RID *rid1 = (const RID *)(v1 + attr_comparator_.attr_length());
-    const RID *rid2 = (const RID *)(v2 + attr_comparator_.attr_length());
+    const RID *rid1 = (const RID *)(v1 + attr_comparator_.attr_length_total());
+    const RID *rid2 = (const RID *)(v2 + attr_comparator_.attr_length_total());
     return RID::compare(rid1, rid2);
   }
 
@@ -99,55 +119,67 @@ private:
 class AttrPrinter
 {
 public:
-  void init(AttrType type, int length)
+  void init(const AttrType types[], const int lengths[], int num_attrs)
   {
-    attr_type_ = type;
-    attr_length_ = length;
+    attr_types_ = types;
+    attr_lengths_ = lengths;
+    num_attrs_ = num_attrs;
+    
+    int attr_length_total = 0;
+    for(int i=0;i<num_attrs;i++) {
+      attr_length_total += lengths[i];
+    }
+    attr_length_total_ = attr_length_total;
+    num_attrs_ = num_attrs;
   }
 
-  int attr_length() const {
-    return attr_length_;
+  int attr_length_total() const {
+    return attr_length_total_;
   }
 
   std::string operator()(const char *v) const {
-    switch (attr_type_) {
-    case INTS: {
-      return std::to_string(*(int*)v);
-    }
-      break;
-    case FLOATS: {
-      return std::to_string(*(float*)v);
-    }
-    case CHARS: {
-      std::string str;
-      for (int i = 0; i < attr_length_; i++) {
-	      if (v[i] == 0) {
-	        break;
-	      }
-	      str.push_back(v[i]);
+    std::string res;
+    for(int i=0;i<num_attrs_;i++) {
+      switch (attr_types_[i]) {
+        case INTS:
+          res += std::to_string(*(int *)v);
+          break;
+        case FLOATS:
+          res += std::to_string(*(float *)v);
+          break;
+        case CHARS:
+          for (int j = 0; j < attr_lengths_[i]; j++) {
+            if (v[j] == '\0') {
+              break;
+            }
+            res.push_back(v[i]);
+          }
+        case DATES: {
+          res += date2string(*(time_t *)v);
+          break;
+        }
+          break;
+        default: 
+          LOG_ERROR("unknown attr type. %d", attr_types_[i]);
+          abort();
       }
-      return str;
+      if(i != num_attrs_ - 1) res += ',';
     }
-    case DATES: {
-      return date2string(*(time_t *)v);
-    }
-    default:{
-      LOG_ERROR("unknown attr type. %d", attr_type_);
-      abort();
-    }
-    }
+    return res;
   }
 private:
-  AttrType attr_type_;
-  int attr_length_;
+  const AttrType *attr_types_;
+  const int *attr_lengths_;
+  int num_attrs_;
+  int attr_length_total_;
 };
 
 class KeyPrinter
 {
 public:
-  void init(AttrType type, int length)
+  void init(const AttrType types[], const int lengths[], int num_attrs)
   {
-    attr_printer_.init(type, length);
+    attr_printer_.init(types, lengths, num_attrs);
   }
 
   const AttrPrinter &attr_printer() const {
@@ -156,9 +188,9 @@ public:
 
   std::string operator() (const char *v) const {
     std::stringstream ss;
-    ss << "{key:" << attr_printer_(v) << ",";
+    ss << "{key:" << attr_printer_(v) << ";";
 
-    const RID *rid = (const RID *)(v + attr_printer_.attr_length());
+    const RID *rid = (const RID *)(v + attr_printer_.attr_length_total());
     ss << "rid:{" << rid->to_string() << "}}";
     return ss.str();
   }
@@ -166,6 +198,8 @@ public:
 private:
   AttrPrinter attr_printer_;
 };
+
+#define OB_MAX_BTREE_INDEX_COLS 16
 
 /**
  * the meta information of bplus tree
@@ -181,21 +215,27 @@ struct IndexFileHeader {
   PageNum  root_page;
   int32_t  internal_max_size;
   int32_t  leaf_max_size;
-  int32_t  attr_length;
+  int32_t  attr_length_total;
   int32_t  key_length; // attr length + sizeof(RID)
-  AttrType attr_type;
+  int32_t  num_attrs;
+  int attr_lengths[OB_MAX_BTREE_INDEX_COLS];
+  AttrType attr_types[OB_MAX_BTREE_INDEX_COLS];
 
   const std::string to_string()
   {
     std::stringstream ss;
 
-    ss << "attr_length:" << attr_length << ","
+    ss << "attr_length_total:" << attr_length_total << ","
        << "key_length:" << key_length << ","
-       << "attr_type:" << attr_type << ","
+       << "num_attrs:" << num_attrs << ","
        << "root_page:" << root_page << ","
        << "internal_max_size:" << internal_max_size << ","
-       << "leaf_max_size:" << leaf_max_size << ";";
-
+       << "leaf_max_size:" << leaf_max_size << ","
+       << "attr_types:[";
+    for(int i=0;i<num_attrs;i++) {
+      ss << attr_types[i] << ",";
+    }
+    ss << "]";
     return ss.str();
   }
 };
@@ -392,7 +432,7 @@ public:
    * 此函数创建一个名为fileName的索引。
    * attrType描述被索引属性的类型，attrLength描述被索引属性的长度
    */
-  RC create(const char *file_name, AttrType attr_type, int attr_length,
+  RC create(const char *file_name, int attr_nums, const AttrType *attr_types, const int *attr_lengths,
 	    int internal_max_size = -1, int leaf_max_size = -1);
 
   RC drop();
@@ -413,16 +453,16 @@ public:
    * 此函数向IndexHandle对应的索引中插入一个索引项。
    * 参数user_key指向要插入的属性值，参数rid标识该索引项对应的元组，
    * 即向索引中插入一个值为（user_key，rid）的键值对
-   * @note 这里假设user_key的内存大小与attr_length 一致
+   * @note 这里假设每个key的内存大小与attr_length一致，key的数量也和 attr_nums一致
    */
-  RC insert_entry(const char *user_key, const RID *rid);
+  RC insert_entry(const char *user_keys[], const RID *rid);
 
   /**
    * 从IndexHandle句柄对应的索引中删除一个值为（*pData，rid）的索引项
    * @return RECORD_INVALID_KEY 指定值不存在
-   * @note 这里假设user_key的内存大小与attr_length 一致
+   * @note 这里假设每个key的内存大小与attr_length一致，key的数量也和 attr_nums一致
    */
-  RC delete_entry(const char *user_key, const RID *rid);
+  RC delete_entry(const char *user_keys[], const RID *rid);
 
   bool is_empty() const;
 
@@ -431,7 +471,7 @@ public:
    * @param key_len user_key的长度
    * @param rid  返回值，记录记录所在的页面号和slot
    */
-  RC get_entry(const char *user_key, int key_len, std::list<RID> &rids);
+  RC get_entry(const char *user_keys[], const int key_lens[], int num_keys, std::list<RID> &rids);
 
   RC sync();
 
@@ -486,6 +526,7 @@ protected:
 
 private:
   char *make_key(const char *user_key, const RID &rid);
+  char *concat_keys(const char *user_keys[]);
   void  free_key(char *key);
 protected:
   DiskBufferPool *disk_buffer_pool_ = nullptr;
@@ -516,8 +557,8 @@ public:
    * @param right_len right_user_key 的内存大小(只有在变长字段中才会关注)
    * @param right_inclusive 右边界的值是否包含在内
    */
-  RC open(const char *left_user_key, int left_len, bool left_inclusive,
-	  const char *right_user_key, int right_len, bool right_inclusive);
+  RC open(const char *left_user_keys[], const int left_lens[], bool left_inclusive,
+	  const char *right_user_keys[], const int right_lens[], bool right_inclusive);
 
   RC next_entry(RID *rid);
 
@@ -526,9 +567,10 @@ public:
 private:
   /**
    * 如果key的类型是CHARS, 扩展或缩减user_key的大小刚好是schema中定义的大小
+   * 假设user_keys的数量等于num_attrs
    */
-  RC fix_user_key(const char *user_key, int key_len, bool want_greater,
-		  char **fixed_key, bool *should_inclusive);
+  RC fix_and_concat_user_key(const char *user_keys[], const int key_lens[], bool want_greater,
+		  char **res_key, bool *should_inclusive);
 private:
   bool inited_ = false;
   BplusTreeHandler &tree_handler_;

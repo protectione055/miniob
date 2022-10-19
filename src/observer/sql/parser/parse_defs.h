@@ -123,7 +123,8 @@ typedef struct {
 typedef struct {
   char *index_name;      // Index name
   char *relation_name;   // Relation name
-  char *attribute_name;  // Attribute name
+  size_t attribute_count;
+  char *attribute_names[MAX_NUM];  // Attribute name
 } CreateIndex;
 
 // struct of  drop_index
@@ -134,6 +135,10 @@ typedef struct {
 typedef struct {
   const char *relation_name;
 } DescTable;
+
+typedef struct {
+  const char *relation_name;
+} ShowIndex;
 
 typedef struct {
   const char *relation_name;
@@ -150,6 +155,7 @@ union Queries {
   CreateIndex create_index;
   DropIndex drop_index;
   DescTable desc_table;
+  ShowIndex show_index;
   LoadData load_data;
   char *errors;
 };
@@ -168,6 +174,7 @@ enum SqlCommandFlag {
   SCF_SYNC,
   SCF_SHOW_TABLES,
   SCF_DESC_TABLE,
+  SCF_SHOW_INDEX,
   SCF_BEGIN,
   SCF_COMMIT,
   SCF_CLOG_SYNC,
@@ -227,14 +234,18 @@ void drop_table_init(DropTable *drop_table, const char *relation_name);
 void drop_table_destroy(DropTable *drop_table);
 
 void create_index_init(
-    CreateIndex *create_index, const char *index_name, const char *relation_name, const char *attr_name);
+    CreateIndex *create_index, const char *index_name, const char *relation_name);
 void create_index_destroy(CreateIndex *create_index);
+void create_index_add_attr(CreateIndex *create_index, const char *attr_name);
 
 void drop_index_init(DropIndex *drop_index, const char *index_name);
 void drop_index_destroy(DropIndex *drop_index);
 
 void desc_table_init(DescTable *desc_table, const char *relation_name);
 void desc_table_destroy(DescTable *desc_table);
+
+void show_index_init(ShowIndex *show_index, const char *relation_name);
+void show_index_destroy(ShowIndex *show_index);
 
 void load_data_init(LoadData *load_data, const char *relation_name, const char *file_name);
 void load_data_destroy(LoadData *load_data);
