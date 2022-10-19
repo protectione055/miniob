@@ -20,4 +20,5 @@ observer.log.*
 src/observer/miniob/
 ./deps/*
 test/case/miniob/
+test/case/result_tmp/
 #*#
