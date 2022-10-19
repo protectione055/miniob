@@ -20,9 +20,9 @@ See the Mulan PSL v2 for more details. */
 class IndexScanOperator : public Operator
 {
 public: 
-  IndexScanOperator(const Table *table, Index *index,
-		    const TupleCell *left_cell, bool left_inclusive,
-		    const TupleCell *right_cell, bool right_inclusive);
+  IndexScanOperator(const Table *table, const Index *index,
+		    const std::vector<TupleCell> &left_cells, bool left_inclusive,
+		    const std::vector<TupleCell> &right_cells, bool right_inclusive);
 
   virtual ~IndexScanOperator() = default;
   
@@ -33,15 +33,15 @@ public:
   Tuple * current_tuple() override;
 private:
   const Table *table_ = nullptr;
-  Index *index_ = nullptr;
+  const Index *index_ = nullptr;
   IndexScanner *index_scanner_ = nullptr;
   RecordFileHandler *record_handler_ = nullptr;
 
   Record current_record_;
   RowTuple tuple_;
 
-  TupleCell left_cell_;
-  TupleCell right_cell_;
+  std::vector<TupleCell> left_cells_;
+  std::vector<TupleCell> right_cells_;
   bool left_inclusive_;
   bool right_inclusive_;
 };
