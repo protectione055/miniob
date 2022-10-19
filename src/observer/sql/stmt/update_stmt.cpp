@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/string.h"
 #include "storage/common/db.h"
 #include "storage/common/table.h"
+#include "sql/stmt/typecast.h"
 
 RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
 {
@@ -42,7 +43,8 @@ RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
 
-  if (table->table_meta().field(update.attribute_name) == nullptr) {
+  const FieldMeta *field_meta = table->table_meta().field(update.attribute_name);
+  if (field_meta == nullptr) {
     LOG_WARN("no such field. db=%s, table_name=%s, attribute_name=%s", db->name(), table_name, update.attribute_name);
     return RC::SCHEMA_FIELD_NOT_EXIST;
   }
@@ -58,9 +60,20 @@ RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
     return rc;
   }
 
+  // check fields type
+  AttrType field_type = field_meta->type();
+  Value v = update.value;
+  if(v.type != field_type) {
+    if(try_typecast(&v, v, field_type) != RC::SUCCESS) {
+      LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d", 
+              table_name, field_meta->name(), field_type, v.type);
+      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    }
+  }
+
   UpdateStmt *update_stmt = new UpdateStmt();
   update_stmt->table_ = table;
-  update_stmt->value_ = update.value;
+  update_stmt->value_ = v;
   update_stmt->attribute_name_ = update.attribute_name;
   update_stmt->filter_stmt_ = filter_stmt;
   stmt = update_stmt;
