@@ -106,6 +106,9 @@ void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t
 {
   attr_info->name = strdup(name);
   attr_info->type = type;
+  if(type == INTS) length = sizeof(int);
+  if(type == FLOATS) length = sizeof(float);
+  if(type == DATES) length = sizeof(time_t);
   attr_info->length = length;
 }
 void attr_info_destroy(AttrInfo *attr_info)
