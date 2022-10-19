@@ -34,7 +34,7 @@ RC cast_string_to_int(Value *dest, void *data)
 {
   int res;
   if(sscanf((char*)data, "%d", &res) == 0) {
-    return RC::MISMATCH;
+    res = 0;
   }
   dest->type = INTS;
   dest->data = malloc(sizeof(int));
@@ -46,7 +46,7 @@ RC cast_string_to_float(Value *dest, void *data)
 {
   float res;
   if(sscanf((char*)data, "%f", &res) == 0) {
-    return RC::MISMATCH;
+    res = 0;
   }
   dest->type = FLOATS;
   dest->data = malloc(sizeof(float));
