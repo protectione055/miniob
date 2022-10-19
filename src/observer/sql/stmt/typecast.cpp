@@ -91,21 +91,21 @@ RC cast_float_to_int(Value *dest, void *data)
 
 RC try_typecast(Value *dest, Value source, AttrType target) {
   if(source.type == CHARS && target == DATES) {
-    cast_string_to_date(dest, source.data);
+    return cast_string_to_date(dest, source.data);
   } else if(source.type == CHARS && target == INTS) {
-    cast_string_to_int(dest, source.data);
+    return cast_string_to_int(dest, source.data);
   } else if(source.type == CHARS && target == FLOATS) {
-    cast_string_to_float(dest, source.data);
+    return cast_string_to_float(dest, source.data);
   } else if(source.type == INTS && target == CHARS) {
-    cast_int_to_string(dest, source.data);
+    return cast_int_to_string(dest, source.data);
   } else if(source.type == FLOATS && target == CHARS) {
-    cast_float_to_string(dest, source.data);
+    return cast_float_to_string(dest, source.data);
   } else if(source.type == INTS && target == FLOATS) {
-    cast_int_to_float(dest, source.data);
+    return cast_int_to_float(dest, source.data);
   } else if(source.type == FLOATS && target == INTS) {
-    cast_float_to_int(dest, source.data);
+    return cast_float_to_int(dest, source.data);
   } else {
-  return RC::MISMATCH;
+    return RC::MISMATCH;
   }
 }
 
