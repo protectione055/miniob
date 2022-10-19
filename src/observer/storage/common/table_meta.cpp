@@ -324,7 +324,7 @@ void TableMeta::desc_index(std::ostream &os) const
   for (const auto &index : indexes_) {
     // TODO: support unique index
     for(int i=0;i<index.num_fields();i++) {
-      os << name_ << " | " << 1 << " | " << index.name() << " | " << i << " | " << index.fields()[i] << std::endl;
+      os << name_ << " | " << 1 << " | " << index.name() << " | " << i + 1 << " | " << index.fields()[i] << std::endl;
     }
   }
 }

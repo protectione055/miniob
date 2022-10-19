@@ -536,13 +536,19 @@ RC ExecuteStage::do_create_index(SQLStageEvent *sql_event)
   SessionEvent *session_event = sql_event->session_event();
   Db *db = session_event->session()->get_current_db();
   const CreateIndex &create_index = sql_event->query()->sstr.create_index;
+  // due to the way the sql is parsed, the order of attributes are reversed
+  // this fixes that, in a very dirty way..... normally i woundn't do this.
+  char *attribute_names[MAX_NUM];
+  for(int i=0;i<create_index.attribute_count;i++) {
+    attribute_names[i] = create_index.attribute_names[create_index.attribute_count-i-1];
+  }
   Table *table = db->find_table(create_index.relation_name);
   if (nullptr == table) {
     session_event->set_response("FAILURE\n");
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
 
-  RC rc = table->create_index(nullptr, create_index.index_name, const_cast<const char**>(create_index.attribute_names), create_index.attribute_count);
+  RC rc = table->create_index(nullptr, create_index.index_name, const_cast<const char**>(attribute_names), create_index.attribute_count);
   sql_event->session_event()->set_response(rc == RC::SUCCESS ? "SUCCESS\n" : "FAILURE\n");
   return rc;
 }

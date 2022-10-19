@@ -114,6 +114,7 @@ const char **BplusTreeIndex::generate_keys_from_record(const char *record) {
     res[i] = record + field_meta->offset();
     i++;
   }
+  return res;
 }
 
 RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)

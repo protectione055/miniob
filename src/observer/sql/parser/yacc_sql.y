@@ -225,11 +225,10 @@ create_index:		/*create index 语句的语法解析树*/
     ;
 
 create_index_attrs:
-	/* empty */ | COMMA ID create_index_attrs
+	/*empty*/ | COMMA ID create_index_attrs 
 		{
 			create_index_add_attr(&CONTEXT->ssql->sstr.create_index, $2);
-		}
-	; 
+		}; 
 
 drop_index:			/*drop index 语句的语法解析树*/
     DROP INDEX ID  SEMICOLON 

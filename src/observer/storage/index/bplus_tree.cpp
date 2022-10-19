@@ -1707,19 +1707,11 @@ RC BplusTreeHandler::delete_entry_internal(Frame *leaf_frame, const char *key)
 
 RC BplusTreeHandler::delete_entry(const char *user_keys[], const RID *rid)
 {
-  char *key = (char *)mem_pool_item_->alloc();
-  if (nullptr == key) {
-    LOG_WARN("Failed to alloc memory for key. size=%d", file_header_.key_length);
+  char *key = make_key(concat_keys(user_keys), *rid);
+  if (key == nullptr) {
+    LOG_WARN("Failed to alloc memory for key.");
     return RC::NOMEM;
   }
-  
-  int offset = 0;
-  for(int i=0;i<file_header_.num_attrs;i++) {
-    int len = file_header_.attr_lengths[i];
-    memcpy(key + offset, user_keys[i], len);
-    offset += len;
-  }
-  memcpy(key + offset, &rid, sizeof(rid));
 
   Frame *leaf_frame;
   RC rc = find_leaf(key, leaf_frame);
