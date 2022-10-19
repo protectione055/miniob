@@ -34,6 +34,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/update_operator.h"
 #include "sql/operator/delete_operator.h"
 #include "sql/operator/project_operator.h"
+#include "sql/operator/aggregate_operator.h"
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/select_stmt.h"
 #include "sql/stmt/update_stmt.h"
@@ -424,7 +425,14 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   PredicateOperator pred_oper(select_stmt->filter_stmt());
   pred_oper.add_child(scan_oper);
   ProjectOperator project_oper;
-  project_oper.add_child(&pred_oper);
+
+  bool do_aggre = false;
+  if (!do_aggre) {
+    project_oper.add_child(&pred_oper);
+  } else {
+    // AggregateOperator aggr_oper(select_stmt->query_fields());
+  }
+
   // add aggregation support
   for (const Field &field : select_stmt->query_fields()) {
     project_oper.add_projection(field.table(), field.meta());

@@ -19,6 +19,6 @@ GTAGS
 observer.log.*
 src/observer/miniob/
 ./deps/*
-test/case/miniob/
+**/miniob/
 test/case/result_tmp/
 #*#
