@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "storage/common/db.h"
 #include "storage/common/table.h"
+#include "sql/stmt/typecast.h"
 
 FilterStmt::~FilterStmt()
 {
@@ -91,6 +92,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
 
   Expression *left = nullptr;
   Expression *right = nullptr;
+  AttrType left_type, right_type;
   if (condition.left_is_attr) {
     Table *table = nullptr;
     const FieldMeta *field = nullptr;
@@ -99,8 +101,10 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       LOG_WARN("cannot find attr");
       return rc;
     }
+    left_type = field->type();
     left = new FieldExpr(table, field);
   } else {
+    left_type = condition.left_value.type;
     left = new ValueExpr(condition.left_value);
   }
 
@@ -113,9 +117,47 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       delete left;
       return rc;
     }
+    right_type = field->type();
     right = new FieldExpr(table, field);
   } else {
+    right_type = condition.right_value.type;
     right = new ValueExpr(condition.right_value);
+  }
+
+  // typecast, as of now, only supports casting of values (no fields or expressions)
+  if(left_type != right_type) {
+    Value v;
+    RC rc = RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    if(condition.left_is_attr && !condition.right_is_attr) { // eg. a < 1
+      rc = try_typecast(&v, condition.right_value, left_type);
+      if(rc != RC::SUCCESS) {
+        LOG_ERROR("failed typecasting from %d to %d.", right_type, left_type);
+        return rc;
+      }
+      delete right;
+      right = new ValueExpr(v);
+    } else if(!condition.left_is_attr && condition.right_is_attr) { // eg. 1 > a
+      rc = try_typecast(&v, condition.left_value, right_type);
+      if(rc != RC::SUCCESS) {
+        LOG_ERROR("failed typecasting from %d to %d.", left_type, right_type);
+        return rc;
+      }
+      delete left;
+      left = new ValueExpr(v);
+    } else if(!condition.left_is_attr && !condition.right_is_attr) { // eg. 1 > "2", try casting in both directions
+      if((rc = try_typecast(&v, condition.left_value, right_type)) != RC::SUCCESS) {
+        rc = try_typecast(&v, condition.right_value, left_type);
+        if(rc != RC::SUCCESS) {
+          LOG_ERROR("failed typecasting between %d and %d.", left_type, right_type);
+          return rc;
+        }
+        delete right;
+        right = new ValueExpr(v);
+      } else {
+        delete left;
+        left = new ValueExpr(v);
+      }
+    }
   }
 
   filter_unit = new FilterUnit;
@@ -123,6 +165,5 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   filter_unit->set_left(left);
   filter_unit->set_right(right);
 
-  // 检查两个类型是否能够比较
   return rc;
 }
