@@ -322,9 +322,8 @@ void TableMeta::desc_index(std::ostream &os) const
   // should really use tuple_to_string() in execute_stage.cpp, but, oh well.
   os << "Table | Non_unique | Key_name | Seq_in_index | Column_name" << std::endl;
   for (const auto &index : indexes_) {
-    // TODO: support unique index
     for(int i=0;i<index.num_fields();i++) {
-      os << name_ << " | " << 1 << " | " << index.name() << " | " << i + 1 << " | " << index.fields()[i] << std::endl;
+      os << name_ << " | " << (index.unique()?0:1) << " | " << index.name() << " | " << i + 1 << " | " << index.fields()[i] << std::endl;
     }
   }
 }

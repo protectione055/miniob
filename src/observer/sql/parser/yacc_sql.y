@@ -69,6 +69,7 @@ ParserContext *get_context(yyscan_t scanner)
         TABLE
         TABLES
         INDEX
+		UNIQUE
         SELECT
         DESC
         SHOW
@@ -230,13 +231,23 @@ desc_table:
     ;
 
 create_index:		/*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE ID create_index_attrs RBRACE SEMICOLON 
+    CREATE optional_unique INDEX ID ON ID LBRACE ID create_index_attrs RBRACE SEMICOLON 
 		{
 			CONTEXT->ssql->flag = SCF_CREATE_INDEX;//"create_index";
-			create_index_init(&CONTEXT->ssql->sstr.create_index, $3, $5);
-			create_index_add_attr(&CONTEXT->ssql->sstr.create_index, $7);
+			create_index_init(&CONTEXT->ssql->sstr.create_index, $4, $6);
+			create_index_add_attr(&CONTEXT->ssql->sstr.create_index, $8);
 		}
     ;
+
+optional_unique:
+	/*empty*/
+		{
+			create_index_set_unique(&CONTEXT->ssql->sstr.create_index, 0);
+		}
+	| UNIQUE 
+		{
+			create_index_set_unique(&CONTEXT->ssql->sstr.create_index, 1);
+		}
 
 create_index_attrs:
 	/*empty*/ | COMMA ID create_index_attrs 

@@ -283,6 +283,10 @@ void create_index_init(CreateIndex *create_index, const char *index_name, const 
   // create_index->attribute_count = 0;
 }
 
+void create_index_set_unique(CreateIndex *create_index, int unique) {
+  create_index->unique = unique;
+}
+
 void create_index_destroy(CreateIndex *create_index)
 {
   free(create_index->index_name);
