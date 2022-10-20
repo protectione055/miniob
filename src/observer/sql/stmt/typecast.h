@@ -15,4 +15,6 @@ RC cast_float_to_int(Value *dest, void *data);
 RC try_typecast(Value *dest, Value source, AttrType target);
 RC try_typecast_bidirection(Value *dest, Value source0, Value source1, int *which_casted);
 
+int get_length_from_value(const Value &v);
+
 #endif

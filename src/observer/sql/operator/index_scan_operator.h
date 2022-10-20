@@ -44,4 +44,6 @@ private:
   std::vector<TupleCell> right_cells_;
   bool left_inclusive_;
   bool right_inclusive_;
+
+  RC init_keys_from_cells(const std::vector<TupleCell> &cells, const char **keys, int *key_lens);
 };

@@ -1,7 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 #include "sql/stmt/typecast.h"
+#include "storage/common/table.h"
+#include "common/log/log.h"
 
 RC cast_string_to_date(Value *dest, void *data)
 {
@@ -137,4 +140,15 @@ RC try_typecast_bidirection(Value *dest, Value source0, Value source1, int *whic
   }
   done:
   return rc;
+}
+
+// this function really shouldn't be here, but again, the codebase is a hot mess already...
+int get_length_from_value(const Value &v) {
+  if(v.type == FLOATS) return sizeof(float);
+  else if(v.type == INTS) return sizeof(int);
+  else if(v.type == CHARS) return strlen((char*)v.data);
+  else if(v.type == DATES) return sizeof(time_t);
+  // really shouldn't reach here
+  LOG_ERROR("get_length_from_value: unrecognized type %d", v.type);
+  return -1;
 }

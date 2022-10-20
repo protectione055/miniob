@@ -1824,7 +1824,7 @@ RC BplusTreeScanner::open(const char *left_user_keys[], const int left_lens[], b
   }
 
   // 没有指定右边界范围，那么就返回右边界最大值
-  if (left_user_keys == nullptr) {
+  if (right_user_keys == nullptr) {
     rc = tree_handler_.right_most_page(right_frame_);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to fetch right most page. rc=%d:%s", rc, strrc(rc));

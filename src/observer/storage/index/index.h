@@ -43,6 +43,11 @@ public:
     return index_meta_;
   }
 
+  const std::vector<FieldMeta> &field_metas() const
+  {
+    return field_metas_;
+  }
+
   virtual RC drop() = 0;
 
   virtual RC insert_entry(const char *record, const RID *rid) = 0;

@@ -14,6 +14,8 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/operator/index_scan_operator.h"
 #include "storage/index/index.h"
+#include "storage/common/table.h"
+#include "sql/stmt/typecast.h"
 
 IndexScanOperator::IndexScanOperator(const Table *table, const Index *index,
 		    const std::vector<TupleCell> &left_cells, bool left_inclusive,
@@ -23,6 +25,23 @@ IndexScanOperator::IndexScanOperator(const Table *table, const Index *index,
     left_cells_(left_cells), right_cells_(right_cells)
 {}
 
+RC IndexScanOperator::init_keys_from_cells(const std::vector<TupleCell> &cells, const char **keys, int *key_lens) {
+  for(int i=0;i<cells.size();i++) {
+    Value value{cells[i].attr_type(), (void*)cells[i].data()};
+    AttrType field_type = index_->field_metas()[i].type();
+    if (value.type != field_type) {
+      RC rc = try_typecast(&value, value, field_type); 
+      if(rc != RC::SUCCESS) {
+        LOG_ERROR("failed casting from %d to %d.", value.type, field_type);
+        return rc;
+      }
+    }
+    keys[i] = (char*)value.data;
+    key_lens[i] = get_length_from_value(value);
+  }
+  return RC::SUCCESS;
+}
+
 RC IndexScanOperator::open()
 {
   if (nullptr == table_ || nullptr == index_) {
@@ -31,21 +50,20 @@ RC IndexScanOperator::open()
 
   const char **left_keys = nullptr, **right_keys = nullptr;
   int *left_lens = nullptr, *right_lens = nullptr;
-  // ugly duplicate code snippet
-  if(left_cells_.size() >= 0) {
+  if(left_cells_.size() > 0) {
     left_keys = new const char*[left_cells_.size()];
     left_lens = new int[left_cells_.size()];
-    for(int i=0;i<left_cells_.size();i++) {
-      left_keys[i] = const_cast<char*>(left_cells_[i].data());
-      left_lens[i] = left_cells_[i].length();
+    RC rc = init_keys_from_cells(left_cells_, left_keys, left_lens);
+    if(rc != RC::SUCCESS) {
+      return rc;
     }
   }
-  if(right_cells_.size() >= 0) {
+  if(right_cells_.size() > 0) {
     right_keys = new const char*[right_cells_.size()];
     right_lens = new int[right_cells_.size()];
-    for(int i=0;i<right_cells_.size();i++) {
-      right_keys[i] = const_cast<char*>(right_cells_[i].data());
-      right_lens[i] = right_cells_[i].length();
+    RC rc = init_keys_from_cells(right_cells_, right_keys, right_lens);
+    if(rc != RC::SUCCESS) {
+      return rc;
     }
   }
   
