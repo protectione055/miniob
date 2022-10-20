@@ -595,14 +595,15 @@ RC ExecuteStage::do_show_index(SQLStageEvent *sql_event)
   Db *db = sql_event->session_event()->session()->get_current_db();
   const char *table_name = query->sstr.desc_table.relation_name;
   Table *table = db->find_table(table_name);
-  std::stringstream ss;
   if (table != nullptr) {
+    std::stringstream ss;
     table->table_meta().desc_index(ss);
+    sql_event->session_event()->set_response(ss.str().c_str());
+    return RC::SUCCESS;
   } else {
-    ss << "No such table: " << table_name << std::endl;
+    sql_event->session_event()->set_response("FAILURE\n");
+    return RC::NOTFOUND;
   }
-  sql_event->session_event()->set_response(ss.str().c_str());
-  return RC::SUCCESS;
 }
 
 RC ExecuteStage::do_insert(SQLStageEvent *sql_event)
