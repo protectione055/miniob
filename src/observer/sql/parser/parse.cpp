@@ -57,6 +57,12 @@ void value_init_string(Value *value, const char *v)
   value->type = CHARS;
   value->data = strdup(v);
 }
+void value_init_date(Value *value, time_t v)
+{
+  value->type = DATES;
+  value->data = malloc(sizeof(v));
+  memcpy(value->data, &v, sizeof(v));
+}
 void value_destroy(Value *value)
 {
   value->type = UNDEFINED;
@@ -100,6 +106,9 @@ void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t
 {
   attr_info->name = strdup(name);
   attr_info->type = type;
+  if(type == INTS) length = sizeof(int);
+  if(type == FLOATS) length = sizeof(float);
+  if(type == DATES) length = sizeof(time_t);
   attr_info->length = length;
 }
 void attr_info_destroy(AttrInfo *attr_info)
@@ -251,22 +260,29 @@ void drop_table_destroy(DropTable *drop_table)
 }
 
 void create_index_init(
-    CreateIndex *create_index, const char *index_name, const char *relation_name, const char *attr_name)
+    CreateIndex *create_index, const char *index_name, const char *relation_name)
 {
   create_index->index_name = strdup(index_name);
   create_index->relation_name = strdup(relation_name);
-  create_index->attribute_name = strdup(attr_name);
+  //create_index->attribute_count = 0;
 }
 
 void create_index_destroy(CreateIndex *create_index)
 {
   free(create_index->index_name);
   free(create_index->relation_name);
-  free(create_index->attribute_name);
+  for(int i=0;i<create_index->attribute_count;i++) {
+    free(create_index->attribute_names[i]);
+    create_index->attribute_names[i] = nullptr;
+  }
 
   create_index->index_name = nullptr;
   create_index->relation_name = nullptr;
-  create_index->attribute_name = nullptr;
+}
+
+void create_index_add_attr(CreateIndex *create_index, const char *attr_name)
+{
+  create_index->attribute_names[create_index->attribute_count++] = strdup(attr_name);
 }
 
 void drop_index_init(DropIndex *drop_index, const char *index_name)
@@ -289,6 +305,17 @@ void desc_table_destroy(DescTable *desc_table)
 {
   free((char *)desc_table->relation_name);
   desc_table->relation_name = nullptr;
+}
+
+void show_index_init(ShowIndex *show_index, const char *relation_name)
+{
+  show_index->relation_name = strdup(relation_name);
+}
+
+void show_index_destroy(ShowIndex *show_index)
+{
+  free((char *)show_index->relation_name);
+  show_index->relation_name = nullptr;
 }
 
 void load_data_init(LoadData *load_data, const char *relation_name, const char *file_name)
@@ -367,6 +394,9 @@ void query_reset(Query *query)
 
     case SCF_DESC_TABLE: {
       desc_table_destroy(&query->sstr.desc_table);
+    } break;
+    case SCF_SHOW_INDEX: {
+      show_index_destroy(&query->sstr.show_index);
     } break;
 
     case SCF_LOAD_DATA: {

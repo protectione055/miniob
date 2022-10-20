@@ -83,6 +83,7 @@ ParserContext *get_context(yyscan_t scanner)
         INT_T
         STRING_T
         FLOAT_T
+		DATE_T
         HELP
         EXIT
         DOT //QUOTE
@@ -142,6 +143,7 @@ command:
 	| create_table
 	| drop_table
 	| show_tables
+	| show_index
 	| desc_table
 	| create_index	
 	| drop_index
@@ -200,6 +202,13 @@ show_tables:
     }
     ;
 
+show_index:
+    SHOW INDEX FROM ID SEMICOLON {
+      CONTEXT->ssql->flag = SCF_SHOW_INDEX;
+	  show_index_init(&CONTEXT->ssql->sstr.show_index, $4);
+    }
+    ;
+
 desc_table:
     DESC ID SEMICOLON {
       CONTEXT->ssql->flag = SCF_DESC_TABLE;
@@ -208,12 +217,19 @@ desc_table:
     ;
 
 create_index:		/*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE ID RBRACE SEMICOLON 
+    CREATE INDEX ID ON ID LBRACE ID create_index_attrs RBRACE SEMICOLON 
 		{
 			CONTEXT->ssql->flag = SCF_CREATE_INDEX;//"create_index";
-			create_index_init(&CONTEXT->ssql->sstr.create_index, $3, $5, $7);
+			create_index_init(&CONTEXT->ssql->sstr.create_index, $3, $5);
+			create_index_add_attr(&CONTEXT->ssql->sstr.create_index, $7);
 		}
     ;
+
+create_index_attrs:
+	/*empty*/ | COMMA ID create_index_attrs 
+		{
+			create_index_add_attr(&CONTEXT->ssql->sstr.create_index, $2);
+		}; 
 
 drop_index:			/*drop index 语句的语法解析树*/
     DROP INDEX ID  SEMICOLON 
@@ -268,6 +284,7 @@ type:
 	INT_T { $$=INTS; }
        | STRING_T { $$=CHARS; }
        | FLOAT_T { $$=FLOATS; }
+	   | DATE_T { $$=DATES; }
        ;
 ID_get:
 	ID 

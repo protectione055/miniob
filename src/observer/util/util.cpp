@@ -30,3 +30,11 @@ std::string double2string(double v)
 
   return std::string(buf, len);
 }
+
+std::string date2string(time_t date)
+{
+  char buf[16];
+  struct tm ts = *gmtime(&date);;
+  strftime(buf, sizeof(buf), "%Y-%m-%d", &ts);
+  return std::string(buf);
+}

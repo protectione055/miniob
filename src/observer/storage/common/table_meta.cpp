@@ -160,16 +160,6 @@ const IndexMeta *TableMeta::index(const char *name) const
   return nullptr;
 }
 
-const IndexMeta *TableMeta::find_index_by_field(const char *field) const
-{
-  for (const IndexMeta &index : indexes_) {
-    if (0 == strcmp(index.field(), field)) {
-      return &index;
-    }
-  }
-  return nullptr;
-}
-
 const IndexMeta *TableMeta::index(int i) const
 {
   return &indexes_[i];
@@ -317,4 +307,24 @@ void TableMeta::desc(std::ostream &os) const
     os << std::endl;
   }
   os << ')' << std::endl;
+}
+
+/*
+format:
+
+Table | Non_unique | Key_name | Seq_in_index | Column_name
+t | 1 | index_id | 1 | id
+t2 | 1 | index_id | 1 | id1
+t2 | 1 | index_id | 2 | id2
+*/
+void TableMeta::desc_index(std::ostream &os) const
+{
+  // should really use tuple_to_string() in execute_stage.cpp, but, oh well.
+  os << "Table | Non_unique | Key_name | Seq_in_index | Column_name" << std::endl;
+  for (const auto &index : indexes_) {
+    // TODO: support unique index
+    for(int i=0;i<index.num_fields();i++) {
+      os << name_ << " | " << 1 << " | " << index.name() << " | " << i + 1 << " | " << index.fields()[i] << std::endl;
+    }
+  }
 }

@@ -14,19 +14,32 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/operator/index_scan_operator.h"
 #include "storage/index/index.h"
+#include "storage/common/table.h"
+#include "sql/stmt/typecast.h"
 
-IndexScanOperator::IndexScanOperator(const Table *table, Index *index,
-		const TupleCell *left_cell, bool left_inclusive,
-		const TupleCell *right_cell, bool right_inclusive)
+IndexScanOperator::IndexScanOperator(const Table *table, const Index *index,
+		    const std::vector<TupleCell> &left_cells, bool left_inclusive,
+		    const std::vector<TupleCell> &right_cells, bool right_inclusive)
   : table_(table), index_(index),
-    left_inclusive_(left_inclusive), right_inclusive_(right_inclusive)
-{
-  if (left_cell) {
-    left_cell_ = *left_cell;
+    left_inclusive_(left_inclusive), right_inclusive_(right_inclusive),
+    left_cells_(left_cells), right_cells_(right_cells)
+{}
+
+RC IndexScanOperator::init_keys_from_cells(const std::vector<TupleCell> &cells, const char **keys, int *key_lens) {
+  for(int i=0;i<cells.size();i++) {
+    Value value{cells[i].attr_type(), (void*)cells[i].data()};
+    AttrType field_type = index_->field_metas()[i].type();
+    if (value.type != field_type) {
+      RC rc = try_typecast(&value, value, field_type); 
+      if(rc != RC::SUCCESS) {
+        LOG_ERROR("failed casting from %d to %d.", value.type, field_type);
+        return rc;
+      }
+    }
+    keys[i] = (char*)value.data;
+    key_lens[i] = get_length_from_value(value);
   }
-  if (right_cell) {
-    right_cell_ = *right_cell;
-  }
+  return RC::SUCCESS;
 }
 
 RC IndexScanOperator::open()
@@ -35,9 +48,27 @@ RC IndexScanOperator::open()
     return RC::INTERNAL;
   }
 
+  const char **left_keys = nullptr, **right_keys = nullptr;
+  int *left_lens = nullptr, *right_lens = nullptr;
+  if(left_cells_.size() > 0) {
+    left_keys = new const char*[left_cells_.size()];
+    left_lens = new int[left_cells_.size()];
+    RC rc = init_keys_from_cells(left_cells_, left_keys, left_lens);
+    if(rc != RC::SUCCESS) {
+      return rc;
+    }
+  }
+  if(right_cells_.size() > 0) {
+    right_keys = new const char*[right_cells_.size()];
+    right_lens = new int[right_cells_.size()];
+    RC rc = init_keys_from_cells(right_cells_, right_keys, right_lens);
+    if(rc != RC::SUCCESS) {
+      return rc;
+    }
+  }
   
-  IndexScanner *index_scanner = index_->create_scanner(left_cell_.data(), left_cell_.length(), left_inclusive_,
-                                                       right_cell_.data(), right_cell_.length(), right_inclusive_);
+  IndexScanner *index_scanner = const_cast<Index*>(index_)->create_scanner(left_keys, left_lens , left_inclusive_,
+                                                       right_keys, right_lens, right_inclusive_);
   if (nullptr == index_scanner) {
     LOG_WARN("failed to create index scanner");
     return RC::INTERNAL;

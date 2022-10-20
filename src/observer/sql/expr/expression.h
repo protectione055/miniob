@@ -83,6 +83,10 @@ public:
   {
     if (value.type == CHARS) {
       tuple_cell_.set_length(strlen((const char *)value.data));
+    } if (value.type == DATES) {
+      tuple_cell_.set_length(sizeof(time_t));
+    } else { // ints and floats, dirty magic number
+      tuple_cell_.set_length(4);
     }
   }
 

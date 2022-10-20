@@ -91,6 +91,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
 
   Expression *left = nullptr;
   Expression *right = nullptr;
+  AttrType left_type, right_type;
   if (condition.left_is_attr) {
     Table *table = nullptr;
     const FieldMeta *field = nullptr;
@@ -99,8 +100,10 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       LOG_WARN("cannot find attr");
       return rc;
     }
+    left_type = field->type();
     left = new FieldExpr(table, field);
   } else {
+    left_type = condition.left_value.type;
     left = new ValueExpr(condition.left_value);
   }
 
@@ -113,8 +116,10 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       delete left;
       return rc;
     }
+    right_type = field->type();
     right = new FieldExpr(table, field);
   } else {
+    right_type = condition.right_value.type;
     right = new ValueExpr(condition.right_value);
   }
 
@@ -123,6 +128,5 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   filter_unit->set_left(left);
   filter_unit->set_right(right);
 
-  // 检查两个类型是否能够比较
   return rc;
 }

@@ -17,6 +17,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "util/comparator.h"
 #include "util/util.h"
+#include <time.h>
+#include "sql/stmt/typecast.h"
 
 void TupleCell::to_string(std::ostream &os) const
 {
@@ -36,6 +38,9 @@ void TupleCell::to_string(std::ostream &os) const
       os << data_[i];
     }
   } break;
+  case DATES: {
+    os << date2string(*(time_t *)data_);
+  } break;
   default: {
     LOG_WARN("unsupported attr type: %d", attr_type_);
   } break;
@@ -44,22 +49,35 @@ void TupleCell::to_string(std::ostream &os) const
 
 int TupleCell::compare(const TupleCell &other) const
 {
-  if (this->attr_type_ == other.attr_type_) {
-    switch (this->attr_type_) {
-    case INTS: return compare_int(this->data_, other.data_);
-    case FLOATS: return compare_float(this->data_, other.data_);
-    case CHARS: return compare_string(this->data_, this->length_, other.data_, other.length_);
+  RC rc = RC::SUCCESS;
+  Value vleft{this->attr_type_, this->data_};
+  Value vright{other.attr_type_, other.data_};
+  if (vleft.type != vright.type) {
+    Value vcasted;
+    int which_casted = -1;
+    rc = try_typecast_bidirection(&vcasted, vleft, vright, &which_casted);
+    if(rc != RC::SUCCESS) {
+      // don't really NEED to be an error, just it's easier to see when debugging.
+      LOG_ERROR("failed casting between %d and %d.", vleft.type, vright.type);
+      return -1;
+    }
+    if(which_casted == 0) {
+      vleft = vcasted;
+    } else {
+      vright = vcasted;
+    }
+  }
+
+  switch (vleft.type) {
+    case INTS: return compare_int(vleft.data, vright.data);
+    case FLOATS: return compare_float(vleft.data, vright.data);
+    case CHARS: return compare_string(vleft.data, strlen((char*)vleft.data), vright.data, strlen((char*)vright.data));
+    case DATES: return compare_time(vleft.data, vright.data);
     default: {
       LOG_WARN("unsupported type: %d", this->attr_type_);
     }
-    }
-  } else if (this->attr_type_ == INTS && other.attr_type_ == FLOATS) {
-    float this_data = *(int *)data_;
-    return compare_float(&this_data, other.data_);
-  } else if (this->attr_type_ == FLOATS && other.attr_type_ == INTS) {
-    float other_data = *(int *)other.data_;
-    return compare_float(data_, &other_data);
   }
+
   LOG_WARN("not supported");
   return -1; // TODO return rc?
 }

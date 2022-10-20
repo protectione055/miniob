@@ -57,3 +57,12 @@ int compare_string(void *arg1, int arg1_max_length, void *arg2, int arg2_max_len
   }
   return 0;
 }
+
+int compare_time(void *arg1, void *arg2)
+{
+  time_t v1 = *(time_t *)arg1;
+  time_t v2 = *(time_t *)arg2;
+  if(v1 > v2) return 1;
+  else if(v1 < v2) return -1;
+  return 0;
+}
