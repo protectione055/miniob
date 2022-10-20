@@ -115,7 +115,7 @@ void selects_append_attribute(Selects *selects, RelAttr *rel_attr)
   // 解析到select含有聚合函数，告诉上层需要做聚合
   if(rel_attr->aggre_type > NOTAGGR){
     selects->do_aggr = true;
-  }
+  } 
   selects->attributes[selects->attr_num++] = *rel_attr;
 }
 void selects_append_relation(Selects *selects, const char *relation_name)

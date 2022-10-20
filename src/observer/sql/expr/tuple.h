@@ -227,3 +227,95 @@ private:
   std::vector<TupleCellSpec *> speces_;
   Tuple *tuple_ = nullptr;
 };
+
+// 临时tuple，用完销毁
+class TempTuple : public Tuple {
+public:
+  TempTuple() = default;
+  ~TempTuple()
+  {
+    for (TupleCellSpec *spec : speces_) {
+      delete spec;
+    }
+    speces_.clear();
+    delete record_;
+  }
+
+  void set_record(Record *record)
+  {
+    this->record_ = record;
+  }
+
+  void set_schema(const Table *table, const std::vector<FieldMeta> *fields)
+  {
+    table_ = table;
+    this->speces_.reserve(fields->size());
+    for (const FieldMeta &field : *fields) {
+      speces_.push_back(new TupleCellSpec(new FieldExpr(table, &field)));
+    }
+  }
+
+  int cell_num() const override
+  {
+    return speces_.size();
+  }
+
+  RC cell_at(int index, TupleCell &cell) const override
+  {
+    if (index < 0 || index >= static_cast<int>(speces_.size())) {
+      LOG_WARN("invalid argument. index=%d", index);
+      return RC::INVALID_ARGUMENT;
+    }
+
+    const TupleCellSpec *spec = speces_[index];
+    FieldExpr *field_expr = (FieldExpr *)spec->expression();
+    const FieldMeta *field_meta = field_expr->field().meta();
+    cell.set_type(field_meta->type());
+    cell.set_data(this->record_->data() + field_meta->offset());
+    cell.set_length(field_meta->len());
+    return RC::SUCCESS;
+  }
+
+  RC find_cell(const Field &field, TupleCell &cell) const override
+  {
+    const char *table_name = field.table_name();
+    if (0 != strcmp(table_name, table_->name())) {
+      return RC::NOTFOUND;
+    }
+
+    const char *field_name = field.field_name();
+    for (size_t i = 0; i < speces_.size(); ++i) {
+      const FieldExpr *field_expr = (const FieldExpr *)speces_[i]->expression();
+      const Field &field = field_expr->field();
+      if (0 == strcmp(field_name, field.field_name())) {
+        return cell_at(i, cell);
+      }
+    }
+    return RC::NOTFOUND;
+  }
+
+  RC cell_spec_at(int index, const TupleCellSpec *&spec) const override
+  {
+    if (index < 0 || index >= static_cast<int>(speces_.size())) {
+      LOG_WARN("invalid argument. index=%d", index);
+      return RC::INVALID_ARGUMENT;
+    }
+    spec = speces_[index];
+    return RC::SUCCESS;
+  }
+
+  Record &record()
+  {
+    return *record_;
+  }
+
+  const Record &record() const
+  {
+    return *record_;
+  }
+
+private:
+  Record *record_ = nullptr;
+  const Table *table_ = nullptr;
+  std::vector<TupleCellSpec *> speces_;
+};
