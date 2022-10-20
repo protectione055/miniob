@@ -68,7 +68,7 @@ RC cast_int_to_string(Value *dest, void *data)
 RC cast_float_to_string(Value *dest, void *data)
 {
   char *res = (char*)malloc(32);
-  sprintf(res, "%f", *(float*)data);
+  sprintf(res, "%g", *(float*)data);
   dest->type = CHARS;
   dest->data = res;
   return RC::SUCCESS;
