@@ -288,16 +288,25 @@ RC Table::insert_record(Trx *trx, Record *record)
 
   rc = insert_entry_of_indexes(record->data(), record->rid());
   if (rc != RC::SUCCESS) {
-    RC rc2 = delete_entry_of_indexes(record->data(), record->rid(), true);
+    if(rc != RC::RECORD_DUPLICATE_KEY) {
+      RC rc2 = delete_entry_of_indexes(record->data(), record->rid(), true);
+      if (rc2 != RC::SUCCESS) {
+        LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
+            name(),
+            rc2,
+            strrc(rc2));
+      }
+    }
+    RC rc2 = record_handler_->delete_record(&record->rid());
     if (rc2 != RC::SUCCESS) {
-      LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
+      LOG_PANIC("Failed to rollback record data when insert index entries failed. table name=%s, rc=%d:%s",
           name(),
           rc2,
           strrc(rc2));
     }
-    rc2 = record_handler_->delete_record(&record->rid());
+    rc2 = trx->delete_record(this, record);
     if (rc2 != RC::SUCCESS) {
-      LOG_PANIC("Failed to rollback record data when insert index entries failed. table name=%s, rc=%d:%s",
+      LOG_PANIC("Failed to rollback trx record when insert index entries failed. table name=%s, rc=%d:%s",
           name(),
           rc2,
           strrc(rc2));
@@ -584,7 +593,7 @@ static RC insert_index_record_reader_adapter(Record *record, void *context)
   return inserter.insert_index(record);
 }
 
-RC Table::create_index(Trx *trx, const char *index_name, const char **attribute_names, int num_attributes)
+RC Table::create_index(Trx *trx, const char *index_name, const char **attribute_names, int num_attributes, bool unique)
 {
   if (common::is_blank(index_name)) {
     LOG_INFO("Invalid input arguments, table name is %s, index_name is blank", name());
@@ -607,7 +616,7 @@ RC Table::create_index(Trx *trx, const char *index_name, const char **attribute_
   }
 
   IndexMeta new_index_meta;
-  RC rc = new_index_meta.init(index_name, field_metas);
+  RC rc = new_index_meta.init(index_name, field_metas, unique);
   if (rc != RC::SUCCESS) {
     LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s",
              name(), index_name);

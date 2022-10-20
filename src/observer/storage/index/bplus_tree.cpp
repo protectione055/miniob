@@ -174,7 +174,8 @@ int LeafIndexNodeHandler::min_size() const
   return header_.leaf_max_size - header_.leaf_max_size / 2;
 }
 
-int LeafIndexNodeHandler::lookup(const KeyComparator &comparator, const char *key, bool *found /* = nullptr */) const
+template<typename Compare>
+int LeafIndexNodeHandler::lookup(const Compare &comparator, const char *key, bool *found /* = nullptr */) const
 {
   const int size = this->size();
   common::BinaryIterator<char> iter_begin(item_size(), __key_at(0));
@@ -1420,7 +1421,7 @@ void BplusTreeHandler::free_key(char *key)
   mem_pool_item_->free(key);
 }
 
-RC BplusTreeHandler::insert_entry(const char *user_keys[], const RID *rid)
+RC BplusTreeHandler::insert_entry(const char *user_keys[], const RID *rid, bool unique)
 {
   if (user_keys == nullptr || rid == nullptr) {
     LOG_WARN("Invalid arguments, key is empty or rid is empty");
@@ -1447,6 +1448,17 @@ RC BplusTreeHandler::insert_entry(const char *user_keys[], const RID *rid)
     return rc;
   }
 
+  if(unique) {
+    LeafIndexNodeHandler left_node(file_header_, frame);
+    bool found = false;
+    // only compare attribute, not rid.
+    left_node.lookup(key_comparator_.attr_comparator(), key, &found);
+    if(found) {
+      mem_pool_item_->free(key);
+      return RC::RECORD_DUPLICATE_KEY;
+    }
+  }
+
   rc = insert_entry_into_leaf_node(frame, key, rid);
   if (rc != RC::SUCCESS) {
     LOG_TRACE("Failed to insert into leaf of index, rid:%s", rid->to_string().c_str());
@@ -1462,7 +1474,7 @@ RC BplusTreeHandler::insert_entry(const char *user_keys[], const RID *rid)
   return RC::SUCCESS;
 }
 
-RC BplusTreeHandler::get_entry(const char *user_keys[], const int key_lens[], int num_keys, std::list<RID> &rids)
+RC BplusTreeHandler::get_entry(const char *user_keys[], const int key_lens[], std::list<RID> &rids)
 {
   BplusTreeScanner scanner(*this);
   RC rc = scanner.open(user_keys, key_lens, true/*left_inclusive*/, user_keys, key_lens, true/*right_inclusive*/);

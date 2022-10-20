@@ -340,7 +340,8 @@ public:
    * 如果key已经存在，会设置found的值
    * NOTE: 当前lookup的实现效率非常低，你是否可以优化它?
    */
-  int lookup(const KeyComparator &comparator, const char *key, bool *found = nullptr) const;
+  template<typename Compare>
+  int lookup(const Compare &comparator, const char *key, bool *found = nullptr) const;
 
   void insert(int index, const char *key, const char *value);
   void remove(int index);
@@ -455,7 +456,7 @@ public:
    * 即向索引中插入一个值为（user_key，rid）的键值对
    * @note 这里假设每个key的内存大小与attr_length一致，key的数量也和 attr_nums一致
    */
-  RC insert_entry(const char *user_keys[], const RID *rid);
+  RC insert_entry(const char *user_keys[], const RID *rid, bool unique);
 
   /**
    * 从IndexHandle句柄对应的索引中删除一个值为（*pData，rid）的索引项
@@ -471,7 +472,7 @@ public:
    * @param key_len user_key的长度
    * @param rid  返回值，记录记录所在的页面号和slot
    */
-  RC get_entry(const char *user_keys[], const int key_lens[], int num_keys, std::list<RID> &rids);
+  RC get_entry(const char *user_keys[], const int key_lens[], std::list<RID> &rids);
 
   RC sync();
 
