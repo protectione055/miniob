@@ -62,5 +62,7 @@ int compare_time(void *arg1, void *arg2)
 {
   time_t v1 = *(time_t *)arg1;
   time_t v2 = *(time_t *)arg2;
-  return v1 - v2;
+  if(v1 > v2) return 1;
+  else if(v1 < v2) return -1;
+  return 0;
 }
