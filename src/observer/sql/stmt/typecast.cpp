@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <utility>
 #include <math.h>
 #include <string.h>
 #include "sql/stmt/typecast.h"
@@ -111,35 +112,41 @@ RC try_typecast(Value *dest, Value source, AttrType target) {
   }
 }
 
-RC try_typecast_bidirection(Value *dest, Value source0, Value source1, int *which_casted) {
-  RC rc = RC::SUCCESS;
-  if(source0.type == INTS && source1.type == FLOATS) {
-    rc = cast_int_to_float(dest, source0.data);
-    *which_casted = 0;
-  } else if(source0.type == FLOATS && source1.type == INTS) {
-    rc = cast_int_to_float(dest, source1.data);
-    *which_casted = 1;
-  } else if(source0.type == CHARS && source1.type == FLOATS) {
-    rc = cast_string_to_float(dest, source0.data);
-    *which_casted = 0;
-  } else if(source0.type == FLOATS && source1.type == CHARS) {
-    rc = cast_string_to_float(dest, source1.data);
-    *which_casted = 1;
-  } else {
-    rc = try_typecast(dest, source0, source1.type);
-    if(rc == RC::SUCCESS) {
-      *which_casted = 0;
-      goto done;
-    }
-    rc = try_typecast(dest, source1, source0.type);
-    if(rc == RC::SUCCESS) {
-      *which_casted = 1;
-      goto done;
-    }
-    rc = RC::MISMATCH;
+RC try_typecast_matchtype(Value *source0, Value *source1) {
+  // special cases
+  // https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+  if(source0->type == INTS && source1->type == FLOATS) {
+    std::swap(source0, source1);
   }
-  done:
-  return rc;
+  if(source0->type == FLOATS && source1->type == INTS) {
+    return cast_int_to_float(source1, source1->data);
+  }
+  if(source0->type == CHARS && source1->type == FLOATS) {
+    std::swap(source0, source1);
+  }
+  if(source0->type == FLOATS && source1->type == CHARS) {
+    return cast_string_to_float(source1, source1->data);
+  }
+  if(source0->type == CHARS && source1->type == INTS) {
+    std::swap(source0, source1);
+  }
+  if(source0->type == INTS && source1->type == CHARS) {
+    RC rc = cast_int_to_float(source0, source0->data);
+    if(rc != RC::SUCCESS) {
+      return rc;
+    }
+    return cast_string_to_float(source1, source1->data);
+  }
+  // otherwise, try both directions separately
+  RC rc = try_typecast(source0, *source0, source1->type);
+  if(rc == RC::SUCCESS) {
+    return rc;
+  }
+  rc = try_typecast(source1, *source1, source0->type);
+  if(rc == RC::SUCCESS) {
+    return rc;
+  }
+  return RC::MISMATCH;
 }
 
 // this function really shouldn't be here, but again, the codebase is a hot mess already...

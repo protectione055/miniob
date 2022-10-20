@@ -53,18 +53,11 @@ int TupleCell::compare(const TupleCell &other) const
   Value vleft{this->attr_type_, this->data_};
   Value vright{other.attr_type_, other.data_};
   if (vleft.type != vright.type) {
-    Value vcasted;
-    int which_casted = -1;
-    rc = try_typecast_bidirection(&vcasted, vleft, vright, &which_casted);
+    rc = try_typecast_matchtype(&vleft, &vright);
     if(rc != RC::SUCCESS) {
       // don't really NEED to be an error, just it's easier to see when debugging.
       LOG_ERROR("failed casting between %d and %d.", vleft.type, vright.type);
       return -1;
-    }
-    if(which_casted == 0) {
-      vleft = vcasted;
-    } else {
-      vright = vcasted;
     }
   }
 
