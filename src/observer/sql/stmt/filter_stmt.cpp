@@ -18,7 +18,6 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "storage/common/db.h"
 #include "storage/common/table.h"
-#include "sql/stmt/typecast.h"
 
 FilterStmt::~FilterStmt()
 {
@@ -122,53 +121,6 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   } else {
     right_type = condition.right_value.type;
     right = new ValueExpr(condition.right_value);
-  }
-
-  // typecast, as of now, only supports casting from values (no fields or expressions)
-  // this can produce some unexpected results, eg.
-  //
-  //         SELECT * FROM t WHERE int_val > 12.5;
-  //
-  // will be casted into
-  //
-  //         SELECT * FROM t WHERE int_val > 13;
-  //
-  // which is incorrect.
-  
-  bool left_is_value = !condition.left_is_attr;
-  bool right_is_value = !condition.right_is_attr;
-  int which_casted = -1;
-  if(left_type != right_type) {
-    Value v;
-    RC rc = RC::SCHEMA_FIELD_TYPE_MISMATCH;
-    if(!left_is_value && right_is_value) { // eg. a < 1
-      rc = try_typecast(&v, condition.right_value, left_type);
-      if(rc != RC::SUCCESS) {
-        LOG_ERROR("failed typecasting from %d to %d.", right_type, left_type);
-        return rc;
-      }
-      which_casted = 1;
-    } else if(left_is_value && !right_is_value) { // eg. 1 > a
-      rc = try_typecast(&v, condition.left_value, right_type);
-      if(rc != RC::SUCCESS) {
-        LOG_ERROR("failed typecasting from %d to %d.", left_type, right_type);
-        return rc;
-      }
-      which_casted = 0;
-    } else if(left_is_value && right_is_value) { // eg. 1 > "2", try casting in both directions
-      rc = try_typecast_bidirection(&v, condition.left_value, condition.right_value, &which_casted);
-      if(rc != RC::SUCCESS) {
-        LOG_ERROR("failed typecasting between %d and %d.", left_type, right_type);
-        return rc;
-      }
-    }
-    if (which_casted == 1) {
-      delete right;
-      right = new ValueExpr(v);
-    } else if (which_casted == 0) {
-      delete left;
-      left = new ValueExpr(v);
-    }
   }
 
   filter_unit = new FilterUnit;
