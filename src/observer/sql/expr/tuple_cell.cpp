@@ -68,7 +68,7 @@ int TupleCell::compare(const TupleCell &other) const
     }
   }
 
-  switch (this->attr_type_) {
+  switch (vleft.type) {
     case INTS: return compare_int(vleft.data, vright.data);
     case FLOATS: return compare_float(vleft.data, vright.data);
     case CHARS: return compare_string(vleft.data, strlen((char*)vleft.data), vright.data, strlen((char*)vright.data));
