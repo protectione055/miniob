@@ -6,7 +6,6 @@
 RC cast_string_to_date(Value *dest, void *data)
 {
   struct tm t;
-  time_t t_of_day;
   int year, mon, day;
   if(sscanf((char*)data, "%d-%d-%d", &year, &mon, &day) < 3) {
     return RC::MISMATCH;
