@@ -290,15 +290,17 @@ IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
   std::vector<const FilterUnit *>better_filters;
   Expression *left0 = filter_units[0]->left();
   Expression *right0 = filter_units[0]->right();
-  if (left0->type() == ExprType::FIELD && right0->type() == ExprType::VALUE) {
-  } else if (left0->type() == ExprType::VALUE && right0->type() == ExprType::FIELD) {
+  if (left0->type() == ExprType::VALUE && right0->type() == ExprType::FIELD) {
     std::swap(left0, right0);
   }
-  FieldExpr &left_field_expr = *(FieldExpr *)left0;
-  const Field &field = left_field_expr.field();
-  // miigon: 这里偷了个懒，只考虑一个表的select，第一个查询条件所涉及表就认为是查询表
-  table = field.table();
-  indexes = (table->indexes()); // again, 偷懒, copy
+  if(left0->type() == ExprType::FIELD) {
+    FieldExpr &left_field_expr = *(FieldExpr *)left0;
+    const Field &field = left_field_expr.field();
+    // miigon: 这里偷了个懒，只考虑一个表的select，第一个查询条件所涉及表就认为是查询表
+    table = field.table();
+    indexes = (table->indexes()); // again, 偷懒, copy
+  }
+  
   const Index *use_index = nullptr;
 
   for(const Index *index : indexes) {
