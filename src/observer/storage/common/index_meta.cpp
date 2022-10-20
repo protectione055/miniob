@@ -54,6 +54,7 @@ void IndexMeta::to_json(Json::Value &json_value) const
 
   json_value[FIELD_NAME] = name_;
   json_value[FIELD_FIELD_NAME] = arr_fields;
+  json_value[FIELD_UNIQUE] = unique_;
 }
 
 RC IndexMeta::from_json(const TableMeta &table, const Json::Value &json_value, IndexMeta &index)
