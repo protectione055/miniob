@@ -23,10 +23,21 @@ See the Mulan PSL v2 for more details. */
 #define MAX_ERROR_MESSAGE 20
 #define MAX_DATA 50
 
+// 聚合函数类型
+typedef enum {
+  NOTAGGR,
+  MIN,
+  MAX,
+  COUNT,
+  AVG,
+  SUM,
+} AggrType;
+
 //属性结构体
 typedef struct {
   char *relation_name;   // relation name (may be NULL) 表名
   char *attribute_name;  // attribute name              属性名
+  AggrType aggre_type;   // 聚合类型
 } RelAttr;
 
 typedef enum {
@@ -40,12 +51,11 @@ typedef enum {
 } CompOp;
 
 //属性值类型
-typedef enum
-{
+typedef enum {
   UNDEFINED,
   CHARS,
   INTS,
-  FLOATS, 
+  FLOATS,
 } AttrType;
 
 //属性值
@@ -74,6 +84,7 @@ typedef struct {
   char *relations[MAX_NUM];       // relations in From clause
   size_t condition_num;           // Length of conditions in Where clause
   Condition conditions[MAX_NUM];  // conditions in Where clause
+  bool do_aggr;                   // 是否是聚合类型查询
 } Selects;
 
 // struct of insert

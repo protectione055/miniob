@@ -9,7 +9,7 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 //
-// Created by Meiyi 
+// Created by Meiyi
 //
 
 #include <mutex>
@@ -111,6 +111,11 @@ void attr_info_destroy(AttrInfo *attr_info)
 void selects_init(Selects *selects, ...);
 void selects_append_attribute(Selects *selects, RelAttr *rel_attr)
 {
+  LOG_DEBUG("selects_append_attribute attr_name %s", selects->attributes->attribute_name);
+  // 解析到select含有聚合函数，告诉上层需要做聚合
+  if(rel_attr->aggre_type > NOTAGGR){
+    selects->do_aggr = true;
+  }
   selects->attributes[selects->attr_num++] = *rel_attr;
 }
 void selects_append_relation(Selects *selects, const char *relation_name)

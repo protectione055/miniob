@@ -102,6 +102,7 @@ ParserContext *get_context(yyscan_t scanner)
         LE
         GE
         NE
+        AGGR
 
 %union {
   struct _Attr *attr;
@@ -110,7 +111,8 @@ ParserContext *get_context(yyscan_t scanner)
   char *string;
   int number;
   float floats;
-	char *position;
+  char *position;
+  AggrType aggr_type;
 }
 
 %token <number> NUMBER
@@ -126,6 +128,7 @@ ParserContext *get_context(yyscan_t scanner)
 %type <condition1> condition;
 %type <value1> value;
 %type <number> number;
+%type <aggr_type> AGGR
 
 %%
 
@@ -369,6 +372,13 @@ select_attr:
 			relation_attr_init(&attr, $1, $3);
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 		}
+    | AGGR LBRACE ID attr_list RBRACE {
+           RelAttr attr;
+           AggrType type = $1;
+		   relation_attr_init(&attr, NULL, $3);
+           attr.aggre_type = type;
+		   selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+        }
     ;
 attr_list:
     /* empty */

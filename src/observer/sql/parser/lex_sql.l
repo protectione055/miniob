@@ -4,6 +4,7 @@
 
 struct ParserContext;
 
+#include "parse_defs.h"
 #include "yacc_sql.tab.h"
 extern int atoi();
 extern double atof();
@@ -71,10 +72,17 @@ QUOTE            [\'\"]
 [Ll][Oo][Aa][Dd]                                     RETURN_TOKEN(LOAD);
 [Dd][Aa][Tt][Aa]                                     RETURN_TOKEN(DATA);
 [Ii][Nn][Ff][Ii][Ll][Ee]                             RETURN_TOKEN(INFILE);
+
+[Mm][Ii][Nn]                                         yylval->aggr_type=MIN; RETURN_TOKEN(AGGR);
+[Mm][Aa][Xx]                                         yylval->aggr_type=MAX; RETURN_TOKEN(AGGR);
+[Cc][Oo][Uu][Nn][Tt]                                 yylval->aggr_type=COUNT; RETURN_TOKEN(AGGR);
+[Ss][Uu][Mm]                                         yylval->aggr_type=SUM; RETURN_TOKEN(AGGR);
+[Aa][Vv][Gg]                                         yylval->aggr_type=AVG; RETURN_TOKEN(AGGR);
+
 {ID}                                                 yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                                  RETURN_TOKEN(LBRACE);
 ")"                                                  RETURN_TOKEN(RBRACE);
-
+              
 ","                                                  RETURN_TOKEN(COMMA);
 "="                                                  RETURN_TOKEN(EQ);
 "<="                                                 RETURN_TOKEN(LE);
