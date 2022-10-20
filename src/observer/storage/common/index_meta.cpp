@@ -32,9 +32,10 @@ RC IndexMeta::init(const char *name, const std::vector<const FieldMeta*> &fields
 
   field_text_ = "";
   name_ = name;
-  fields_ = new const char*[fields.size()];
+  fields_ = new char*[fields.size()];
   for (int i=0;i<fields.size();i++) {
-    fields_[i] = fields[i]->name();
+    fields_[i] = new char[128];
+    strcpy(fields_[i], fields[i]->name());
     field_text_ += fields_[i];
     if(i != fields.size() - 1) field_text_ += ",";
   }
@@ -97,7 +98,7 @@ const char *IndexMeta::name() const
 
 const char **IndexMeta::fields() const
 {
-  return fields_;
+  return const_cast<const char**>(fields_);
 }
 
 int IndexMeta::num_fields() const

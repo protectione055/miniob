@@ -45,7 +45,7 @@ public:
 
 protected:
   std::string name_;   // index's name
-  const char **fields_ = nullptr;  // fields' name
+  char **fields_ = nullptr;  // fields' name
   std::string field_text_;
   int num_fields_ = 0;
 };

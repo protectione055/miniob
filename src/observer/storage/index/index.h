@@ -58,7 +58,7 @@ protected:
 
 protected:
   IndexMeta index_meta_;
-  std::vector<const FieldMeta*> field_metas_;
+  std::vector<FieldMeta> field_metas_;
 };
 
 class IndexScanner {

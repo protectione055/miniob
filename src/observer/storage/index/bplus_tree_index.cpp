@@ -111,7 +111,7 @@ const char **BplusTreeIndex::generate_keys_from_record(const char *record) {
   const char **res = new const char*[field_metas_.size()];
   int i = 0;
   for(auto &field_meta : field_metas_) {
-    res[i] = record + field_meta->offset();
+    res[i] = record + field_meta.offset();
     i++;
   }
   return res;
