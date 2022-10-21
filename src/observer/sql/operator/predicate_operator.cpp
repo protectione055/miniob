@@ -73,32 +73,48 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
     TupleCell right_cell;
     left_expr->get_value(tuple, left_cell);
     right_expr->get_value(tuple, right_cell);
-
-    const int compare = left_cell.compare(right_cell);
+    
     bool filter_result = false;
-    switch (comp) {
-    case EQUAL_TO: {
-      filter_result = (0 == compare); 
-    } break;
-    case LESS_EQUAL: {
-      filter_result = (compare <= 0); 
-    } break;
-    case NOT_EQUAL: {
-      filter_result = (compare != 0);
-    } break;
-    case LESS_THAN: {
-      filter_result = (compare < 0);
-    } break;
-    case GREAT_EQUAL: {
-      filter_result = (compare >= 0);
-    } break;
-    case GREAT_THAN: {
-      filter_result = (compare > 0);
-    } break;
-    default: {
-      LOG_WARN("invalid compare type: %d", comp);
-    } break;
+    if(comp == LIKE || comp == NOT_LIKE){
+      const bool like = left_cell.like(right_cell);
+      switch (comp) {
+      case LIKE: {
+        filter_result = (like == true);
+      } break;
+      case NOT_LIKE: {
+        filter_result = (like == false);
+      } break;
+      default: {
+        LOG_WARN("invalid compare type: %d", comp);
+      } break;
+      }
+    }else{
+      const int compare = left_cell.compare(right_cell);
+      switch (comp) {
+      case EQUAL_TO: {
+        filter_result = (0 == compare); 
+      } break;
+      case LESS_EQUAL: {
+        filter_result = (compare <= 0); 
+      } break;
+      case NOT_EQUAL: {
+        filter_result = (compare != 0);
+      } break;
+      case LESS_THAN: {
+        filter_result = (compare < 0);
+      } break;
+      case GREAT_EQUAL: {
+        filter_result = (compare >= 0);
+      } break;
+      case GREAT_THAN: {
+        filter_result = (compare > 0);
+      } break;
+      default: {
+        LOG_WARN("invalid compare type: %d", comp);
+      } break;
+      }
     }
+    
     if (!filter_result) {
       return false;
     }
