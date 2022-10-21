@@ -103,6 +103,9 @@ ParserContext *get_context(yyscan_t scanner)
         LE
         GE
         NE
+		LIKE_TOKEN
+		NOT_TOKEN
+        AGGR
 
 %union {
   struct _Attr *attr;
@@ -527,7 +530,7 @@ condition:
 			// $$->right_attr.attribute_name=NULL;
 			// $$->right_value =*$5;			
 							
-    }
+    	}
     |value comOp ID DOT ID
 		{
 			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 1];
@@ -548,7 +551,7 @@ condition:
 			// $$->right_attr.relation_name = $3;
 			// $$->right_attr.attribute_name = $5;
 									
-    }
+    	}
     |ID DOT ID comOp ID DOT ID
 		{
 			RelAttr left_attr;
@@ -567,7 +570,7 @@ condition:
 			// $$->right_is_attr = 1;		//属性
 			// $$->right_attr.relation_name=$5;
 			// $$->right_attr.attribute_name=$7;
-    }
+    	}
     ;
 
 comOp:
@@ -577,6 +580,8 @@ comOp:
     | LE { CONTEXT->comp = LESS_EQUAL; }
     | GE { CONTEXT->comp = GREAT_EQUAL; }
     | NE { CONTEXT->comp = NOT_EQUAL; }
+    | LIKE_TOKEN { CONTEXT->comp = LIKE; }
+    | NOT_TOKEN LIKE_TOKEN { CONTEXT->comp = NOT_LIKE; }
     ;
 
 load_data:

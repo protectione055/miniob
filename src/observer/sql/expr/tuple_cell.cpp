@@ -74,3 +74,43 @@ int TupleCell::compare(const TupleCell &other) const
   LOG_WARN("not supported");
   return -1; // TODO return rc?
 }
+
+//字符串模糊匹配
+bool TupleCell::like(const TupleCell &other) const
+{
+  if (this->attr_type_ == CHARS && other.attr_type_ == CHARS) {
+    int last[2] = {-1, -1}; //记录上一次匹配到%的位置
+    int sPos = 0, pPos = 0; //记录当前匹配到的位置
+    const char *str = (const char *)this->data_;
+    const char *pattern = (const char *)other.data_;
+
+	  while (sPos < strlen(str))
+	  {
+		  if (pPos < strlen(pattern) && (pattern[pPos] == str[sPos]) ||
+            pattern[pPos] == '_' || pattern[pPos] == '%')
+		  {
+		  	if (pattern[pPos] == '%')
+		  	{
+		  		last[0] = pPos;
+		  		last[1] = sPos;
+		  	}else{
+		  		sPos++;
+		  	}
+		  	pPos++;
+		  }else if (last[0] != -1){
+		  	pPos = last[0] + 1;
+		  	sPos = last[1] + 1;
+		  	last[1]++;
+		  }
+		  else
+		  	return false;
+	  }
+
+	  while (pPos < strlen(pattern) && pattern[pPos] == '%')
+		  pPos++;
+
+	  return (pPos == strlen(pattern));
+  }
+  LOG_WARN("not supported");
+  return false;
+}
