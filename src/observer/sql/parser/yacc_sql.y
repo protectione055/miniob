@@ -109,9 +109,13 @@ ParserContext *get_context(yyscan_t scanner)
         NE
 		LIKE_TOKEN
 		NOT_TOKEN
+<<<<<<< HEAD
         HAVING
 		GROUP
 		BY
+=======
+
+>>>>>>> implement aggregate function
 %union {
   struct _Attr *attr;
   struct _Condition *condition1;
@@ -475,10 +479,16 @@ attr_list:
   	  }
 	| COMMA aggregate LBRACE STAR RBRACE attr_list {
 			RelAttr attr;
+<<<<<<< HEAD
 			relation_attr_init(&attr, NULL, "*");
 			attr.aggr_type = $2;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 			CONTEXT->ssql->sstr.selection.is_aggr = 1;
+=======
+			relation_attr_init(&attr, NULL, $4);
+			attr.aggr_type = $2;
+			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+>>>>>>> implement aggregate function
      	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
       }
@@ -487,7 +497,10 @@ attr_list:
 			relation_attr_init(&attr, NULL, $4);
 			attr.aggr_type = $2;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+<<<<<<< HEAD
 			CONTEXT->ssql->sstr.selection.is_aggr = 1;
+=======
+>>>>>>> implement aggregate function
      	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
       }
@@ -496,7 +509,10 @@ attr_list:
 			relation_attr_init(&attr, $4, $6);
 			attr.aggr_type = $2;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+<<<<<<< HEAD
 			CONTEXT->ssql->sstr.selection.is_aggr = 1;
+=======
+>>>>>>> implement aggregate function
      	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
       }
