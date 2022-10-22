@@ -19,6 +19,16 @@ See the Mulan PSL v2 for more details. */
 #include "storage/common/db.h"
 #include "storage/common/table.h"
 
+const char *const aggr_name[] = {
+    "NOT_AGGR",
+    "MIN",
+    "TUE",
+    "MAX",
+    "SUM",
+    "COUNT",
+    "AVG",
+};
+
 SelectStmt::~SelectStmt()
 {
   if (nullptr != filter_stmt_) {
@@ -65,15 +75,30 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   
   // collect query fields in `select` statement
   std::vector<Field> query_fields;
+  size_t attr_offset = 0;
   for (int i = select_sql.attr_num - 1; i >= 0; i--) {
     const RelAttr &relation_attr = select_sql.attributes[i];
 
     if (common::is_blank(relation_attr.relation_name) && 0 == strcmp(relation_attr.attribute_name, "*")) {
-      for (Table *table : tables) {
-        wildcard_fields(table, query_fields);
+      if (select_sql.is_aggr) {
+        // select count(*) from t;
+        // 只有COUNT操作支持*
+        if (relation_attr.aggr_type != COUNT) {
+          return RC::MISMATCH;
+        }
+        size_t attr_len = sizeof(int);
+        FieldMeta *field_meta = new FieldMeta;
+        field_meta->init("COUNT(*)", INTS, attr_offset, attr_len, true);
+        query_fields.push_back(Field(nullptr, field_meta, relation_attr.aggr_type, nullptr));
+        attr_offset += attr_len;
+      } else {
+        for (Table *table : tables) {
+          // select * from t;
+          wildcard_fields(table, query_fields);
+        }
       }
 
-    } else if (!common::is_blank(relation_attr.relation_name)) { // TODO
+    } else if (!common::is_blank(relation_attr.relation_name)) {  // select ID DOT ID from t;
       const char *table_name = relation_attr.relation_name;
       const char *field_name = relation_attr.attribute_name;
 
@@ -94,14 +119,15 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
 
         Table *table = iter->second;
         if (0 == strcmp(field_name, "*")) {
+          // select t.* from t;
           wildcard_fields(table, query_fields);
         } else {
+          // select t.a from t;
           const FieldMeta *field_meta = table->table_meta().field(field_name);
           if (nullptr == field_meta) {
             LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
             return RC::SCHEMA_FIELD_MISSING;
           }
-
         query_fields.push_back(Field(table, field_meta));
         }
       }
@@ -117,8 +143,39 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
         LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name);
         return RC::SCHEMA_FIELD_MISSING;
       }
-
-      query_fields.push_back(Field(table, field_meta));
+      if (select_sql.is_aggr) {
+        // select min/max/sum/avg/count(a) from t;
+        assert(relation_attr.aggr_type != NOT_AGGR);
+        if ((relation_attr.aggr_type == SUM || relation_attr.aggr_type == AVG) && field_meta->type() == CHARS) {
+          return RC::MISMATCH;
+        }
+        FieldMeta *aggr_field_meta = new FieldMeta;
+        size_t attr_len;
+        AttrType attr_type;
+        switch (relation_attr.aggr_type) {
+          case MIN:
+          case MAX:
+          case SUM:
+            attr_len = field_meta->len();
+            attr_type = field_meta->type();
+            break;
+          case AVG:
+            attr_len = sizeof(float);
+            attr_type = FLOATS;
+            break;
+          case COUNT:
+            attr_len = sizeof(int);
+            attr_type = INTS;
+        }
+        char *aggr_field_name = new char[10 + strlen(relation_attr.attribute_name)];
+        sprintf(aggr_field_name, "%s(%s)", aggr_name[relation_attr.aggr_type], relation_attr.attribute_name);
+        aggr_field_meta->init(aggr_field_name, attr_type, attr_offset, attr_len, true);
+        query_fields.push_back(Field(table, aggr_field_meta, relation_attr.aggr_type, field_meta));
+        attr_offset += attr_len;
+      } else {
+        // select a from t;
+        query_fields.push_back(Field(table, field_meta));
+      }
     }
   }
 
@@ -143,6 +200,10 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   select_stmt->tables_.swap(tables);
   select_stmt->query_fields_.swap(query_fields);
   select_stmt->filter_stmt_ = filter_stmt;
+  select_stmt->do_aggr_ = select_sql.is_aggr;  // 告知执行器生成aggregate_operator
   stmt = select_stmt;
   return RC::SUCCESS;
 }
+
+void init_aggr_select(SelectStmt &select_stmt)
+{}

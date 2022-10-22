@@ -93,14 +93,18 @@ extern int yydebug;
     NE = 299,
     LIKE_TOKEN = 300,
     NOT_TOKEN = 301,
-    AGGR = 302,
-    NUMBER = 303,
-    FLOAT = 304,
-    ID = 305,
-    PATH = 306,
-    SSS = 307,
-    STAR = 308,
-    STRING_V = 309
+    NUMBER = 302,
+    FLOAT = 303,
+    ID = 304,
+    PATH = 305,
+    SSS = 306,
+    STAR = 307,
+    STRING_V = 308,
+    MIN_AGGR = 309,
+    MAX_AGGR = 310,
+    COUNT_AGGR = 311,
+    SUM_AGGR = 312,
+    AVG_AGGR = 313
   };
 #endif
 
@@ -108,7 +112,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 110 "yacc_sql.y"
+#line 109 "yacc_sql.y"
 
   struct _Attr *attr;
   struct _Condition *condition1;
@@ -116,9 +120,9 @@ union YYSTYPE
   char *string;
   int number;
   float floats;
-	char *position;
+  char *position;
 
-#line 122 "yacc_sql.tab.h"
+#line 126 "yacc_sql.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

@@ -33,6 +33,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/update_operator.h"
 #include "sql/operator/delete_operator.h"
 #include "sql/operator/project_operator.h"
+#include "sql/operator/aggregate_operator.h"
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/select_stmt.h"
 #include "sql/stmt/update_stmt.h"
@@ -445,6 +446,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
     return rc;
   }
 
+  // 创建执行计划
   Operator *scan_oper = try_to_create_index_scan_operator(select_stmt->filter_stmt());
   if (nullptr == scan_oper) {
     scan_oper = new TableScanOperator(select_stmt->tables()[0]);
@@ -454,8 +456,17 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
 
   PredicateOperator pred_oper(select_stmt->filter_stmt());
   pred_oper.add_child(scan_oper);
+
+  AggregateOperator aggregate_oper(select_stmt->query_fields());
   ProjectOperator project_oper;
-  project_oper.add_child(&pred_oper);
+  if (select_stmt->do_aggregate()) {
+    aggregate_oper.add_child(&pred_oper);
+    project_oper.add_child(&aggregate_oper);
+  } else {
+    project_oper.add_child(&pred_oper);
+  }
+
+  // 初始化project_operator
   for (const Field &field : select_stmt->query_fields()) {
     project_oper.add_projection(field.table(), field.meta());
   }
@@ -466,6 +477,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
     return rc;
   }
 
+  // 开始执行
   std::stringstream ss;
   print_tuple_header(ss, project_oper);
   while ((rc = project_oper.next()) == RC::SUCCESS) {
@@ -484,11 +496,12 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
 
   if (rc != RC::RECORD_EOF) {
     LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
+    session_event->set_response("FAILED\n");
     project_oper.close();
   } else {
     rc = project_oper.close();
+    session_event->set_response(ss.str());
   }
-  session_event->set_response(ss.str());
   return rc;
 }
 

@@ -9,7 +9,7 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 //
-// Created by Meiyi 
+// Created by Meiyi
 //
 
 #include <mutex>
@@ -29,6 +29,7 @@ void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const
   } else {
     relation_attr->relation_name = nullptr;
   }
+  relation_attr->aggr_type = NOT_AGGR;
   relation_attr->attribute_name = strdup(attribute_name);
 }
 
@@ -106,9 +107,12 @@ void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t
 {
   attr_info->name = strdup(name);
   attr_info->type = type;
-  if(type == INTS) length = sizeof(int);
-  if(type == FLOATS) length = sizeof(float);
-  if(type == DATES) length = sizeof(time_t);
+  if (type == INTS)
+    length = sizeof(int);
+  if (type == FLOATS)
+    length = sizeof(float);
+  if (type == DATES)
+    length = sizeof(time_t);
   attr_info->length = length;
 }
 void attr_info_destroy(AttrInfo *attr_info)
@@ -259,19 +263,18 @@ void drop_table_destroy(DropTable *drop_table)
   drop_table->relation_name = nullptr;
 }
 
-void create_index_init(
-    CreateIndex *create_index, const char *index_name, const char *relation_name)
+void create_index_init(CreateIndex *create_index, const char *index_name, const char *relation_name)
 {
   create_index->index_name = strdup(index_name);
   create_index->relation_name = strdup(relation_name);
-  //create_index->attribute_count = 0;
+  // create_index->attribute_count = 0;
 }
 
 void create_index_destroy(CreateIndex *create_index)
 {
   free(create_index->index_name);
   free(create_index->relation_name);
-  for(int i=0;i<create_index->attribute_count;i++) {
+  for (int i = 0; i < create_index->attribute_count; i++) {
     free(create_index->attribute_names[i]);
     create_index->attribute_names[i] = nullptr;
   }
