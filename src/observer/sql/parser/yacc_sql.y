@@ -84,6 +84,7 @@ ParserContext *get_context(yyscan_t scanner)
         TRX_ROLLBACK
         INT_T
         STRING_T
+		TEXT_T
         FLOAT_T
 		DATE_T
         HELP
@@ -281,6 +282,17 @@ attr_def:
 		{
 			AttrInfo attribute;
 			attr_info_init(&attribute, CONTEXT->id, $2, 4);
+			create_table_append_attribute(&CONTEXT->ssql->sstr.create_table, &attribute);
+			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name=(char*)malloc(sizeof(char));
+			// strcpy(CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name, CONTEXT->id); 
+			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].type=$2;  
+			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].length=4; // default attribute length
+			CONTEXT->value_length++;
+		}
+    |ID_get TEXT_T
+		{
+			AttrInfo attribute;
+			attr_info_init(&attribute, CONTEXT->id, CHARS, 4096);
 			create_table_append_attribute(&CONTEXT->ssql->sstr.create_table, &attribute);
 			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name=(char*)malloc(sizeof(char));
 			// strcpy(CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name, CONTEXT->id); 
