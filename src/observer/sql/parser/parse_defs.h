@@ -24,10 +24,21 @@ See the Mulan PSL v2 for more details. */
 #define MAX_ERROR_MESSAGE 20
 #define MAX_DATA 50
 
+//聚合操作类型
+typedef enum {
+  NOT_AGGR,  //非聚合
+  MIN,       //最小值
+  MAX,       //最大值
+  SUM,       //求和
+  COUNT,     //计数
+  AVG		 //求平均
+} AggrType;
+
 //属性结构体
 typedef struct {
   char *relation_name;   // relation name (may be NULL) 表名
   char *attribute_name;  // attribute name              属性名
+  AggrType aggr_type;    // aggregate type				聚合类型
 } RelAttr;
 
 typedef enum {
@@ -43,8 +54,7 @@ typedef enum {
 } CompOp;
 
 //属性值类型
-typedef enum
-{
+typedef enum {
   UNDEFINED,
   CHARS,
   INTS,
@@ -72,9 +82,10 @@ typedef struct _Condition {
 
 // struct of select
 typedef struct {
+  int is_aggr;                    // flag of select type, 1 if it will do aggregation
   size_t attr_num;                // Length of attrs in Select clause
   RelAttr attributes[MAX_NUM];    // attrs in Select clause
-  size_t relation_num;            // Length of relations in Fro clause
+  size_t relation_num;            // Length of relations in From clause
   char *relations[MAX_NUM];       // relations in From clause
   size_t condition_num;           // Length of conditions in Where clause
   Condition conditions[MAX_NUM];  // conditions in Where clause
@@ -123,8 +134,8 @@ typedef struct {
 
 // struct of create_index
 typedef struct {
-  char *index_name;      // Index name
-  char *relation_name;   // Relation name
+  char *index_name;     // Index name
+  char *relation_name;  // Relation name
   size_t attribute_count;
   char *attribute_names[MAX_NUM];  // Attribute name
   int unique; // is unique
@@ -236,8 +247,7 @@ void create_table_destroy(CreateTable *create_table);
 void drop_table_init(DropTable *drop_table, const char *relation_name);
 void drop_table_destroy(DropTable *drop_table);
 
-void create_index_init(
-    CreateIndex *create_index, const char *index_name, const char *relation_name);
+void create_index_init(CreateIndex *create_index, const char *index_name, const char *relation_name);
 void create_index_destroy(CreateIndex *create_index);
 void create_index_add_attr(CreateIndex *create_index, const char *attr_name);
 void create_index_set_unique(CreateIndex *create_index, int unique);

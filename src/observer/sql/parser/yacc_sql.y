@@ -19,7 +19,7 @@ typedef struct ParserContext {
   Value values[MAX_NUM];
   Condition conditions[MAX_NUM];
   CompOp comp;
-	char id[MAX_NUM];
+  char id[MAX_NUM];
 } ParserContext;
 
 //获取子串
@@ -88,7 +88,7 @@ ParserContext *get_context(yyscan_t scanner)
 		DATE_T
         HELP
         EXIT
-        DOT //QUOTE
+        DOT //QUOTE_type
         INTO
         VALUES
         FROM
@@ -107,7 +107,6 @@ ParserContext *get_context(yyscan_t scanner)
         NE
 		LIKE_TOKEN
 		NOT_TOKEN
-        AGGR
 
 %union {
   struct _Attr *attr;
@@ -116,7 +115,7 @@ ParserContext *get_context(yyscan_t scanner)
   char *string;
   int number;
   float floats;
-	char *position;
+  char *position;
 }
 
 %token <number> NUMBER
@@ -126,12 +125,18 @@ ParserContext *get_context(yyscan_t scanner)
 %token <string> SSS
 %token <string> STAR
 %token <string> STRING_V
+%token <number> MIN_AGGR
+%token <number> MAX_AGGR
+%token <number> COUNT_AGGR
+%token <number> SUM_AGGR
+%token <number> AVG_AGGR
 //非终结符
 
 %type <number> type;
 %type <condition1> condition;
 %type <value1> value;
 %type <number> number;
+%type <number> aggregate;
 
 %%
 
@@ -412,7 +417,42 @@ select_attr:
 			relation_attr_init(&attr, $1, $3);
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 		}
+	| aggregate LBRACE STAR RBRACE attr_list {
+			RelAttr attr;
+			relation_attr_init(&attr, NULL, "*");
+			attr.aggr_type = $1;
+			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+			CONTEXT->ssql->sstr.selection.is_aggr = 1;
+	}
+	| aggregate LBRACE ID DOT STAR RBRACE attr_list {
+			RelAttr attr;
+			relation_attr_init(&attr, $3, "*");
+			attr.aggr_type = $1;
+			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+			CONTEXT->ssql->sstr.selection.is_aggr = 1;
+	}
+	| aggregate LBRACE ID RBRACE attr_list {
+			RelAttr attr;
+			relation_attr_init(&attr, NULL, $3);
+			attr.aggr_type = $1;
+			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+			CONTEXT->ssql->sstr.selection.is_aggr = 1;
+	}
+	| aggregate LBRACE ID DOT ID RBRACE attr_list {
+			RelAttr attr;
+			relation_attr_init(&attr, $3, $5);
+			attr.aggr_type = $1;
+			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+			CONTEXT->ssql->sstr.selection.is_aggr = 1;
+	}
     ;
+aggregate:
+      MIN_AGGR {$$ = MIN;}
+	| MAX_AGGR {$$ = MAX;}
+	| COUNT_AGGR {$$ = COUNT;}
+	| SUM_AGGR {$$ = SUM;}
+	| AVG_AGGR {$$ = AVG;}
+	;
 attr_list:
     /* empty */
     | COMMA ID attr_list {
@@ -429,6 +469,30 @@ attr_list:
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].attribute_name=$4;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].relation_name=$2;
   	  }
+	| COMMA aggregate LBRACE STAR RBRACE attr_list {
+			RelAttr attr;
+			relation_attr_init(&attr, NULL, $4);
+			attr.aggr_type = $2;
+			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+     	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
+        // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
+      }
+	| COMMA aggregate LBRACE ID RBRACE attr_list {
+			RelAttr attr;
+			relation_attr_init(&attr, NULL, $4);
+			attr.aggr_type = $2;
+			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+     	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
+        // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
+      }
+	| COMMA aggregate LBRACE ID DOT ID RBRACE attr_list {
+			RelAttr attr;
+			relation_attr_init(&attr, $4, $6);
+			attr.aggr_type = $2;
+			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+     	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
+        // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
+      }
   	;
 
 rel_list:
