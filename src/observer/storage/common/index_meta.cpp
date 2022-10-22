@@ -22,8 +22,9 @@ See the Mulan PSL v2 for more details. */
 
 const static Json::StaticString FIELD_NAME("name");
 const static Json::StaticString FIELD_FIELD_NAME("field_name");
+const static Json::StaticString FIELD_UNIQUE("unique");
 
-RC IndexMeta::init(const char *name, const std::vector<const FieldMeta*> &fields)
+RC IndexMeta::init(const char *name, const std::vector<const FieldMeta*> &fields, bool unique)
 {
   if (common::is_blank(name)) {
     LOG_ERROR("Failed to init index, name is empty.");
@@ -33,6 +34,7 @@ RC IndexMeta::init(const char *name, const std::vector<const FieldMeta*> &fields
   field_text_ = "";
   name_ = name;
   fields_ = new char*[fields.size()];
+  unique_ = unique;
   for (int i=0;i<fields.size();i++) {
     fields_[i] = new char[128];
     strcpy(fields_[i], fields[i]->name());
@@ -52,12 +54,14 @@ void IndexMeta::to_json(Json::Value &json_value) const
 
   json_value[FIELD_NAME] = name_;
   json_value[FIELD_FIELD_NAME] = arr_fields;
+  json_value[FIELD_UNIQUE] = unique_;
 }
 
 RC IndexMeta::from_json(const TableMeta &table, const Json::Value &json_value, IndexMeta &index)
 {
   const Json::Value &name_value = json_value[FIELD_NAME];
   const Json::Value &field_value = json_value[FIELD_FIELD_NAME];
+  const Json::Value &unique_value = json_value[FIELD_UNIQUE];
   if (!name_value.isString()) {
     LOG_ERROR("Index name is not a string. json value=%s", name_value.toStyledString().c_str());
     return RC::GENERIC_ERROR;
@@ -69,6 +73,12 @@ RC IndexMeta::from_json(const TableMeta &table, const Json::Value &json_value, I
         field_value.toStyledString().c_str());
     return RC::GENERIC_ERROR;
   }
+
+  if (!unique_value.isBool()) {
+    LOG_ERROR("Index unique is not a bool. json value=%s", name_value.toStyledString().c_str());
+    return RC::GENERIC_ERROR;
+  }
+
 
   std::vector<const FieldMeta*> fields;
   for (auto iter = field_value.begin(); iter != field_value.end(); iter++) {
@@ -88,7 +98,7 @@ RC IndexMeta::from_json(const TableMeta &table, const Json::Value &json_value, I
     fields.push_back(field);
   }
 
-  return index.init(name_value.asCString(), std::move(fields));
+  return index.init(name_value.asCString(), std::move(fields), unique_value.asBool());
 }
 
 const char *IndexMeta::name() const
@@ -99,6 +109,11 @@ const char *IndexMeta::name() const
 const char **IndexMeta::fields() const
 {
   return const_cast<const char**>(fields_);
+}
+
+bool IndexMeta::unique() const
+{
+  return unique_;
 }
 
 int IndexMeta::num_fields() const

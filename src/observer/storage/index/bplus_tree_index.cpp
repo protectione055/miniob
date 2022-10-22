@@ -120,7 +120,7 @@ const char **BplusTreeIndex::generate_keys_from_record(const char *record) {
 RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
 {
   const char **user_keys = generate_keys_from_record(record);
-  RC rc = index_handler_.insert_entry(user_keys, rid);
+  RC rc = index_handler_.insert_entry(user_keys, rid, index_meta_.unique());
   delete[] user_keys;
   return rc;
 }
