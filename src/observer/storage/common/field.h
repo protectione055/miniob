@@ -62,7 +62,7 @@ public:
 
 private:
   const Table *table_ = nullptr;
-  const FieldMeta *field_ = nullptr;
+  const FieldMeta *field_ = nullptr;          // 进行count(id)这样的查询时，记录结果中count(id)字段的metadata
   const AggrType aggr_type_ = NOT_AGGR;
-  const FieldMeta *sub_fieldmeta_ = nullptr;  // 进行count(id)这样的查询时，方便从元组获取cell
+  const FieldMeta *sub_fieldmeta_ = nullptr;  // 进行count(id)这样的查询时，记录id的metadata
 };

@@ -33,7 +33,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/update_operator.h"
 #include "sql/operator/delete_operator.h"
 #include "sql/operator/project_operator.h"
-#include "sql/operator/aggregate_operator.h"
+#include "sql/operator/hash_aggregate_operator.h"
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/select_stmt.h"
 #include "sql/stmt/update_stmt.h"
@@ -457,7 +457,8 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   PredicateOperator pred_oper(select_stmt->filter_stmt());
   pred_oper.add_child(scan_oper);
 
-  AggregateOperator aggregate_oper(select_stmt->query_fields());
+  HashAggregateOperator aggregate_oper(
+      select_stmt->query_fields(), select_stmt->group_keys(), select_stmt->having_stmt());
   ProjectOperator project_oper;
   if (select_stmt->do_aggregate()) {
     aggregate_oper.add_child(&pred_oper);
