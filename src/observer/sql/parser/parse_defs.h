@@ -89,6 +89,10 @@ typedef struct {
   char *relations[MAX_NUM];       // relations in From clause
   size_t condition_num;           // Length of conditions in Where clause
   Condition conditions[MAX_NUM];  // conditions in Where clause
+  size_t group_by_key_num;        // Length of relations in group by clause
+  RelAttr group_by_keys[MAX_NUM];            // attr in group by clause
+  Condition having_conditions[MAX_NUM];  // having clause for aggregation
+  size_t having_condition_num;           // Length of conditions in having clause
 } Selects;
 
 // struct of insert

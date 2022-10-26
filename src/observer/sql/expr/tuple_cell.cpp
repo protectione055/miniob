@@ -118,10 +118,10 @@ bool TupleCell::like(const TupleCell &other) const
 RC TupleCell::add(const TupleCell &other)
 {
   RC rc = RC::SUCCESS;
-  if (other.attr_type() == CHARS) {
-    LOG_WARN("char arithmetic is not allowed");
-    return RC::MISMATCH;
-  }
+  //   if (other.attr_type() == CHARS) {
+  //     LOG_WARN("char arithmetic is not allowed");
+  //     return RC::MISMATCH;
+  //   }
   Value value;
   Value source = {other.attr_type(), const_cast<char *>(other.data())};
   if (attr_type_ != other.attr_type()) {
@@ -143,8 +143,8 @@ RC TupleCell::add(const TupleCell &other)
       *(float *)data += *(float *)value.data;
       break;
     default:
-      LOG_WARN("unknown attr_type_ %d", other.attr_type(), attr_type_);
-      return RC::MISMATCH;
+      LOG_WARN("cast unknown type to float, god knows what's gonna happen..");
+      *(float *)data += *(float *)value.data;
       break;
   }
   return rc;

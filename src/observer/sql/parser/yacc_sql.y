@@ -14,10 +14,12 @@ typedef struct ParserContext {
   Query * ssql;
   size_t select_length;
   size_t condition_length;
+  size_t having_condition_length;
   size_t from_length;
   size_t value_length;
   Value values[MAX_NUM];
   Condition conditions[MAX_NUM];
+  Condition having_conditions[MAX_NUM];
   CompOp comp;
   char id[MAX_NUM];
 } ParserContext;
@@ -107,7 +109,9 @@ ParserContext *get_context(yyscan_t scanner)
         NE
 		LIKE_TOKEN
 		NOT_TOKEN
-
+        HAVING
+		GROUP
+		BY
 %union {
   struct _Attr *attr;
   struct _Condition *condition1;
@@ -383,7 +387,7 @@ update:			/*  update 语句的语法解析树*/
 		}
     ;
 select:				/*  select 语句的语法解析树*/
-    SELECT select_attr FROM ID rel_list where SEMICOLON
+    SELECT select_attr FROM ID rel_list where group_by having SEMICOLON
 		{
 			// CONTEXT->ssql->sstr.selection.relations[CONTEXT->from_length++]=$4;
 			selects_append_relation(&CONTEXT->ssql->sstr.selection, $4);
@@ -471,9 +475,10 @@ attr_list:
   	  }
 	| COMMA aggregate LBRACE STAR RBRACE attr_list {
 			RelAttr attr;
-			relation_attr_init(&attr, NULL, $4);
+			relation_attr_init(&attr, NULL, "*");
 			attr.aggr_type = $2;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+			CONTEXT->ssql->sstr.selection.is_aggr = 1;
      	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
       }
@@ -482,6 +487,7 @@ attr_list:
 			relation_attr_init(&attr, NULL, $4);
 			attr.aggr_type = $2;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+			CONTEXT->ssql->sstr.selection.is_aggr = 1;
      	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
       }
@@ -490,11 +496,40 @@ attr_list:
 			relation_attr_init(&attr, $4, $6);
 			attr.aggr_type = $2;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+			CONTEXT->ssql->sstr.selection.is_aggr = 1;
      	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
       }
   	;
-
+group_by:
+    | GROUP BY ID group_key_list {
+			RelAttr attr;
+			relation_attr_init(&attr, NULL, $3);
+			selects_append_groupkey(&CONTEXT->ssql->sstr.selection, &attr);
+	}
+	| GROUP BY ID DOT ID group_key_list {
+			RelAttr attr;
+			relation_attr_init(&attr, $3, $5);
+			selects_append_groupkey(&CONTEXT->ssql->sstr.selection, &attr);
+	}
+	;
+group_key_list:
+    /* empty */
+    | COMMA ID group_key_list {
+			RelAttr attr;
+			relation_attr_init(&attr, NULL, $2);
+			selects_append_groupkey(&CONTEXT->ssql->sstr.selection, &attr);
+     	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
+        // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
+      }
+    | COMMA ID DOT ID group_key_list {
+			RelAttr attr;
+			relation_attr_init(&attr, $2, $4);
+			selects_append_groupkey(&CONTEXT->ssql->sstr.selection, &attr);
+        // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].attribute_name=$4;
+        // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].relation_name=$2;
+  	  }
+	;
 rel_list:
     /* empty */
     | COMMA ID rel_list {	
@@ -657,6 +692,107 @@ condition:
 			// $$->right_is_attr = 1;		//属性
 			// $$->right_attr.relation_name=$5;
 			// $$->right_attr.attribute_name=$7;
+    	}
+    ;
+having:
+	| HAVING having_condition having_condition_list {
+
+	}
+	;
+having_condition_list:
+    /* empty */
+    | AND having_condition condition_list {
+				// CONTEXT->conditions[CONTEXT->condition_length++]=*$2;
+			}
+    ;
+having_condition:
+    aggregate LBRACE STAR RBRACE comOp value 
+	{
+		RelAttr left_attr;
+		relation_attr_init(&left_attr, NULL, "COUNT(*)");
+		left_attr.aggr_type = COUNT;
+
+		Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
+
+		Condition having_condition;
+		condition_init(&having_condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, right_value);
+		CONTEXT->having_conditions[CONTEXT->having_condition_length++] = having_condition;
+	}
+	| aggregate LBRACE ID RBRACE comOp value 
+	{
+		RelAttr left_attr;
+		relation_attr_init(&left_attr, NULL, $3);
+		left_attr.aggr_type = $1;
+
+		Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
+
+		Condition having_condition;
+		condition_init(&having_condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, right_value);
+		CONTEXT->having_conditions[CONTEXT->having_condition_length++] = having_condition;
+	}
+	| aggregate LBRACE ID DOT ID RBRACE comOp value 
+	{
+		RelAttr left_attr;
+		relation_attr_init(&left_attr, $3, $5);
+		left_attr.aggr_type = $1;
+
+		Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
+
+		Condition having_condition;
+		condition_init(&having_condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, right_value);
+		CONTEXT->having_conditions[CONTEXT->having_condition_length++] = having_condition;
+	}
+    | aggregate LBRACE ID RBRACE comOp ID
+		{
+			RelAttr left_attr;
+			relation_attr_init(&left_attr, NULL, $3);
+			left_attr.aggr_type = $1;
+
+			RelAttr right_attr;
+			relation_attr_init(&right_attr, NULL, $6);
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		}
+	| aggregate LBRACE ID RBRACE comOp ID DOT ID
+		{
+			RelAttr left_attr;
+			relation_attr_init(&left_attr, NULL, $3);
+			left_attr.aggr_type = $1;
+
+			RelAttr right_attr;
+			relation_attr_init(&right_attr, $6, $8);
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		}
+    | aggregate LBRACE ID DOT ID RBRACE comOp ID
+		{
+			RelAttr left_attr;
+			relation_attr_init(&left_attr, $3, $5);
+			left_attr.aggr_type = $1;
+
+			RelAttr right_attr;
+			relation_attr_init(&right_attr, NULL, $8);
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+			CONTEXT->conditions[CONTEXT->condition_length++] = condition;						
+    	}
+    | aggregate LBRACE ID DOT ID RBRACE comOp ID DOT ID
+		{
+			RelAttr left_attr;
+			relation_attr_init(&left_attr, $3, $5);
+			left_attr.aggr_type = $1;
+
+			RelAttr right_attr;
+			relation_attr_init(&right_attr, $8, $10);
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
     	}
     ;
 

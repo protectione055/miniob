@@ -8,7 +8,7 @@ const char *aggr_type_name[] = {"NOT_AGGR", "MIN", "MAX", "SUM", "COUNT", "AVG"}
 RC AggregateOperator::open()
 {
   if (children_.size() != 1) {
-    LOG_WARN("project operator must has 1 child");
+    LOG_WARN("aggregate operator must has 1 child");
     return RC::INTERNAL;
   }
 
@@ -71,9 +71,6 @@ RC AggregateOperator::next()
             if (first_shot || aggr_type == MIN && cur_cell.compare(child_cell) > 0 ||
                 aggr_type == MAX && cur_cell.compare(child_cell) < 0) {
               cur_data = const_cast<char *>(cur_cell.data());
-              if (first_shot) {
-                first_shot = false;
-              }
               //假设字符串是定长
               if (cur_cell.length() != child_cell.length()) {
                 LOG_WARN("mismatch cell length: cur_cell=%d, child_cell=%d", cur_cell.length(), child_cell.length());
@@ -97,6 +94,9 @@ RC AggregateOperator::next()
           default:
             break;
         }
+      }
+      if (first_shot) {
+        first_shot = false;
       }
     }
   }
