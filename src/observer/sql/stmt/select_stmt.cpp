@@ -87,8 +87,6 @@ static RC wildcard_fields(
   }
   return RC::SUCCESS;
 }
-  return RC::SUCCESS;
-}
 
 RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
 {
