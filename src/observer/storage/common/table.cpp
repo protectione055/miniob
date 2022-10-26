@@ -763,7 +763,16 @@ RC Table::update_record(Trx *trx, Record *record, const char *attribute_name, co
     rc = trx->update_record(this, record);
     
     CLogRecord *clog_record = nullptr;
-    rc = clog_manager_->clog_gen_record(CLogType::REDO_UPDATE, trx->get_current_id(), clog_record, name(), 0, record);
+    rc = clog_manager_->clog_gen_record(CLogType::REDO_DELETE, trx->get_current_id(), clog_record, name(), 0, record);
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to create a clog record. rc=%d:%s", rc, strrc(rc));
+      return rc;
+    }
+    rc = clog_manager_->clog_append_record(clog_record);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+    rc = clog_manager_->clog_gen_record(CLogType::REDO_INSERT, trx->get_current_id(), clog_record, name(), table_meta_.record_size(), record);
     if (rc != RC::SUCCESS) {
       LOG_ERROR("Failed to create a clog record. rc=%d:%s", rc, strrc(rc));
       return rc;
