@@ -475,7 +475,7 @@ attr_list:
   	  }
 	| COMMA aggregate LBRACE STAR RBRACE attr_list {
 			RelAttr attr;
-			relation_attr_init(&attr, NULL, $4);
+			relation_attr_init(&attr, NULL, "*");
 			attr.aggr_type = $2;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 			CONTEXT->ssql->sstr.selection.is_aggr = 1;
