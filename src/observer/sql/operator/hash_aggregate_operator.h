@@ -103,7 +103,7 @@ private:
   const FilterStmt *having_stmt_ = nullptr;
   std::vector<Field> group_by_keys_;
   std::map<Key, TempTuple *> tuples_;
-  std::map<Key, std::map<int, int>> valid_count_;  //记录每个group上的各个avg结果的除数，即非空值的数量
+  std::map<Key, std::map<int, int>> valid_count_;  //记录每个group上的各个avg结果的除数，只计算非空值的数量
   bool first_fetch_ = true;                        //标记是否取第一个元组
   std::map<Key, TempTuple *>::iterator iter_;
 };

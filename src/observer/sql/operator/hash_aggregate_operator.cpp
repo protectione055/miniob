@@ -147,15 +147,12 @@ RC HashAggregateOperator::open()
 
   // 计算avg结果
   if (do_avg) {
-    // 遍历groups
-    for (auto &i : valid_count_) {
-      // get <Key, std::map<int, int>> pairs
-      TempTuple *group_tuple = tuples_[i.first];
-      std::map<int, int> &idx_cnt_map = i.second;
-      for (auto &j : idx_cnt_map) {
-        // 遍历每个group中的avg累加结果
-        int index = j.first;
-        int valid_num = j.second;
+    for (auto &row : valid_count_) {
+      TempTuple *group_tuple = tuples_[row.first];
+      std::map<int, int> &idx_cnt_map = row.second;
+      for (auto &col : idx_cnt_map) {
+        int index = col.first;
+        int valid_num = col.second;
         TupleCell cur_cell;
         rc = group_tuple->cell_at(index, cur_cell);
         if (rc != RC::SUCCESS) {
@@ -209,6 +206,7 @@ RC HashAggregateOperator::tuple_cell_spec_at(int index, const TupleCellSpec *&sp
   return iter_->second->cell_spec_at(index, spec);
 }
 
+// 处理having条件
 bool HashAggregateOperator::having(const Tuple *tuple, const FilterStmt *having_stmt) const
 {
   if (having_stmt == nullptr || having_stmt->filter_units().empty()) {

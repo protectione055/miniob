@@ -73,7 +73,6 @@ static RC wildcard_fields(
   for (int i = table_meta.sys_field_num(); i < field_num; i++) {
     const FieldMeta *cur_fieldmeta = table_meta.field(i);
     if (is_aggr) {
-      // 如果是聚合查询，必须检查字段是否出现在group by子句中
       if (!check_field_in_group(is_aggr, table_meta.field(i), group_by_keys)) {
         return RC::SCHEMA_FIELD_NAME_ILLEGAL;
       }
@@ -85,8 +84,6 @@ static RC wildcard_fields(
       field_metas.push_back(Field(table, table_meta.field(i)));
     }
   }
-  return RC::SUCCESS;
-}
   return RC::SUCCESS;
 }
 
@@ -149,7 +146,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     if (common::is_blank(relation_attr.relation_name) && 0 == strcmp(relation_attr.attribute_name, "*")) {
       if (relation_attr.aggr_type != NOT_AGGR) {
         // select count(*) from t;
-        // 只有COUNT操作支持*
+        // 只有COUNT操作支持*通配符
         if (relation_attr.aggr_type != COUNT) {
           return RC::MISMATCH;
         }
