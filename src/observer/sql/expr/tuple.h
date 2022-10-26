@@ -250,6 +250,78 @@ public:
     }
   }
 
+  TempTuple(const TempTuple &t)
+  {
+    size_t data_len = 0.;
+    for (int i = 0; i < t.cell_num(); i++) {
+      TupleCell cell;
+      const TupleCellSpec *cell_spec;
+      t.cell_at(i, cell);
+      t.cell_spec_at(i, cell_spec);
+      data_len += cell.length();
+      FieldExpr *field_expr = (FieldExpr *)cell_spec->expression();
+      Field field = field_expr->field();
+      FieldExpr *new_field_expr = new FieldExpr(field.table(), field.meta());
+      TupleCellSpec *new_spec = new TupleCellSpec(new_field_expr);
+      this->speces_.push_back(new_spec);
+    }
+    char *data = nullptr;
+    if (data_len > 0) {
+      data = new char[data_len];
+      memcpy(data, t.record().data(), data_len);
+      record_.set_data(data);
+    }
+  }
+
+  TempTuple &operator=(const TempTuple &other)
+  {
+    if (&other != this) {
+      size_t data_len = 0.;
+      for (int i = 0; i < other.cell_num(); i++) {
+        TupleCell cell;
+        const TupleCellSpec *cell_spec;
+        other.cell_at(i, cell);
+        other.cell_spec_at(i, cell_spec);
+        data_len += cell.length();
+        FieldExpr *field_expr = (FieldExpr *)cell_spec->expression();
+        Field field = field_expr->field();
+        FieldExpr *new_field_expr = new FieldExpr(field.table(), field.meta());
+        TupleCellSpec *new_spec = new TupleCellSpec(new_field_expr);
+        this->speces_.push_back(new_spec);
+      }
+      char *data = nullptr;
+      if (data_len > 0) {
+        data = new char[data_len];
+        memcpy(data, other.record().data(), data_len);
+        record_.set_data(data);
+      }
+    }
+
+    return *this;
+  }
+
+  // 元组比较
+  int compare(const TempTuple &other) const
+  {
+    int res = 0;
+    if (&other == this) {
+      return res;
+    }
+    for (int i = 0; i < speces_.size(); i++) {
+      TupleCell this_cell, other_cell;
+      this->cell_at(i, this_cell);
+      other.cell_at(i, other_cell);
+      int cmp_res = this_cell.compare(other_cell);
+      if (cmp_res == 0)
+        continue;
+      else {
+        res = cmp_res;
+        break;
+      }
+    }
+    return res;
+  }
+
   void set_schema(const std::vector<FieldMeta *> fields)
   {
     speces_.clear();

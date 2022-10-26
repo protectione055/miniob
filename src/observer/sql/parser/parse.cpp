@@ -139,6 +139,19 @@ void selects_append_conditions(Selects *selects, Condition conditions[], size_t 
   }
   selects->condition_num = condition_num;
 }
+void selects_append_groupkey(Selects *selects, RelAttr *rel_attr)
+{
+  rel_attr->aggr_type = NOT_AGGR;
+  selects->group_by_keys[selects->group_by_key_num++] = *rel_attr;
+}
+void selects_append_having_conditions(Selects *selects, Condition conditions[], size_t condition_num)
+{
+  assert(condition_num <= sizeof(selects->having_conditions) / sizeof(selects->having_conditions[0]));
+  for (size_t i = 0; i < condition_num; i++) {
+    selects->having_conditions[i] = conditions[i];
+  }
+  selects->having_condition_num = condition_num;
+}
 
 void selects_destroy(Selects *selects)
 {

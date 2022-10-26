@@ -22,12 +22,40 @@ See the Mulan PSL v2 for more details. */
 const char *const aggr_name[] = {
     "NOT_AGGR",
     "MIN",
-    "TUE",
     "MAX",
     "SUM",
     "COUNT",
     "AVG",
 };
+
+// 通过列名查找所属的table
+RC find_table(const std::vector<Table *> &tables, Table *&table, const RelAttr &rel_attr)
+{
+  table = nullptr;
+  for (Table *t : tables) {
+    if (!table && t->table_meta().field(rel_attr.attribute_name)) {
+      table = t;
+    } else if (table && t->table_meta().field(rel_attr.attribute_name)) {
+      LOG_WARN("invalid. I do not know the attr's table. attr=%s", rel_attr.attribute_name);
+      return RC::SCHEMA_FIELD_MISSING;
+    }
+  }
+  return RC::SUCCESS;
+}
+
+//检查非聚合字段是否出现在group by子句中
+RC check_field_in_group(bool is_aggr, const FieldMeta *field_meta, std::vector<Field> &group_by_keys)
+{
+  if (!is_aggr) {
+    return RC::SUCCESS;
+  }
+  for (Field &key : group_by_keys) {
+    if (strcmp(key.field_name(), field_meta->name()) == 0) {
+      return RC::SUCCESS;
+    }
+  }
+  return RC::SCHEMA_FIELD_NAME_ILLEGAL;
+}
 
 SelectStmt::~SelectStmt()
 {
@@ -37,17 +65,32 @@ SelectStmt::~SelectStmt()
   }
 }
 
-static void wildcard_fields(Table *table, std::vector<Field> &field_metas)
+static RC wildcard_fields(
+    Table *table, std::vector<Field> &field_metas, bool is_aggr, std::vector<Field> &group_by_keys, size_t &attr_offset)
 {
   const TableMeta &table_meta = table->table_meta();
   const int field_num = table_meta.field_num();
   for (int i = table_meta.sys_field_num(); i < field_num; i++) {
-    field_metas.push_back(Field(table, table_meta.field(i)));
+    const FieldMeta *cur_fieldmeta = table_meta.field(i);
+    if (is_aggr) {
+      // 如果是聚合查询，必须检查字段是否出现在group by子句中
+      if (!check_field_in_group(is_aggr, table_meta.field(i), group_by_keys)) {
+        return RC::SCHEMA_FIELD_NAME_ILLEGAL;
+      }
+      FieldMeta *new_fieldmeta = new FieldMeta();
+      new_fieldmeta->init(cur_fieldmeta->name(), cur_fieldmeta->type(), attr_offset, cur_fieldmeta->len(), true);
+      field_metas.push_back(Field(table, new_fieldmeta, NOT_AGGR, cur_fieldmeta));
+      attr_offset += table_meta.field(i)->len();
+    } else {
+      field_metas.push_back(Field(table, table_meta.field(i)));
+    }
   }
+  return RC::SUCCESS;
 }
 
 RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
 {
+  RC rc = RC::SUCCESS;
   if (nullptr == db) {
     LOG_WARN("invalid argument. db is null");
     return RC::INVALID_ARGUMENT;
@@ -70,9 +113,31 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     }
 
     tables.push_back(table);
-    table_map.insert(std::pair<std::string, Table*>(table_name, table));
+    table_map.insert(std::pair<std::string, Table *>(table_name, table));
   }
-  
+
+  // collect group by keys
+  std::vector<Field> group_by_keys;
+  if (select_sql.is_aggr) {
+    for (int i = 0; i < select_sql.group_by_key_num; i++) {
+      const RelAttr &group_by_attr = select_sql.group_by_keys[i];
+      Table *table;
+      if (common::is_blank(group_by_attr.relation_name)) {
+        rc = find_table(tables, table, group_by_attr);
+        if (rc != RC::SUCCESS || table == nullptr) {
+          LOG_WARN("failed to find table for group-by key %s", group_by_attr.attribute_name);
+          return rc;
+        }
+      }
+      const FieldMeta *field_meta = table->table_meta().field(group_by_attr.attribute_name);
+      if (nullptr == field_meta) {
+        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), group_by_attr.attribute_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+      group_by_keys.push_back(Field(table, field_meta, NOT_AGGR, nullptr));
+    }
+  }
+
   // collect query fields in `select` statement
   std::vector<Field> query_fields;
   size_t attr_offset = 0;
@@ -80,7 +145,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     const RelAttr &relation_attr = select_sql.attributes[i];
 
     if (common::is_blank(relation_attr.relation_name) && 0 == strcmp(relation_attr.attribute_name, "*")) {
-      if (select_sql.is_aggr) {
+      if (relation_attr.aggr_type != NOT_AGGR) {
         // select count(*) from t;
         // 只有COUNT操作支持*
         if (relation_attr.aggr_type != COUNT) {
@@ -94,7 +159,11 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
       } else {
         for (Table *table : tables) {
           // select * from t;
-          wildcard_fields(table, query_fields);
+          rc = wildcard_fields(table, query_fields, select_sql.is_aggr, group_by_keys, attr_offset);
+          if (rc != RC::SUCCESS) {
+            LOG_WARN("invalid field name while field is *.");
+            return rc;
+          }
         }
       }
 
@@ -103,12 +172,12 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
       const char *field_name = relation_attr.attribute_name;
 
       if (0 == strcmp(table_name, "*")) {
-        if (0 != strcmp(field_name, "*")) {
+        if (0 != strcmp(field_name, "*") || select_sql.is_aggr) {
           LOG_WARN("invalid field name while table is *. attr=%s", field_name);
           return RC::SCHEMA_FIELD_MISSING;
         }
         for (Table *table : tables) {
-          wildcard_fields(table, query_fields);
+          wildcard_fields(table, query_fields, false, group_by_keys, attr_offset);
         }
       } else {
         auto iter = table_map.find(table_name);
@@ -120,7 +189,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
         Table *table = iter->second;
         if (0 == strcmp(field_name, "*")) {
           // select t.* from t;
-          wildcard_fields(table, query_fields);
+          wildcard_fields(table, query_fields, select_sql.is_aggr, group_by_keys, attr_offset);
         } else {
           // select t.a from t;
           const FieldMeta *field_meta = table->table_meta().field(field_name);
@@ -128,10 +197,54 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
             LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
             return RC::SCHEMA_FIELD_MISSING;
           }
-        query_fields.push_back(Field(table, field_meta));
+
+          if (select_sql.is_aggr) {
+            // select min/max/sum/avg/count(t.a), b from t group by b;
+            if ((relation_attr.aggr_type == SUM || relation_attr.aggr_type == AVG) && field_meta->type() == CHARS) {
+              return RC::MISMATCH;
+            }
+            FieldMeta *aggr_field_meta = new FieldMeta;
+            size_t attr_len;
+            AttrType attr_type;
+            char *aggr_field_name;
+            if (relation_attr.aggr_type != NOT_AGGR) {
+              aggr_field_name = new char[10 + strlen(relation_attr.attribute_name)];
+              sprintf(aggr_field_name, "%s(%s)", aggr_name[relation_attr.aggr_type], relation_attr.attribute_name);
+            } else {
+              aggr_field_name = relation_attr.attribute_name;
+              rc = check_field_in_group(true, field_meta, group_by_keys);
+              if (rc != RC::SUCCESS) {
+                LOG_WARN("invalid field name. attr=%s", field_meta->name());
+                return rc;
+              }
+            }
+            switch (relation_attr.aggr_type) {
+              case NOT_AGGR:
+              case MIN:
+              case MAX:
+              case SUM:
+                attr_len = field_meta->len();
+                attr_type = field_meta->type();
+                break;
+              case AVG:
+                attr_len = sizeof(float);
+                attr_type = FLOATS;
+                break;
+              case COUNT:
+                attr_len = sizeof(int);
+                attr_type = INTS;
+                break;
+            }
+            aggr_field_meta->init(aggr_field_name, attr_type, attr_offset, attr_len, true);
+            query_fields.push_back(Field(table, aggr_field_meta, relation_attr.aggr_type, field_meta));
+            attr_offset += attr_len;
+          } else {
+            query_fields.push_back(Field(table, field_meta));
+          }
         }
       }
     } else {
+      // 字段没有指定表名
       if (tables.size() != 1) {
         LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name);
         return RC::SCHEMA_FIELD_MISSING;
@@ -144,15 +257,27 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
         return RC::SCHEMA_FIELD_MISSING;
       }
       if (select_sql.is_aggr) {
-        // select min/max/sum/avg/count(a) from t;
-        assert(relation_attr.aggr_type != NOT_AGGR);
+        // select min/max/sum/avg/count(a), b from t group by b;
         if ((relation_attr.aggr_type == SUM || relation_attr.aggr_type == AVG) && field_meta->type() == CHARS) {
           return RC::MISMATCH;
         }
-        FieldMeta *aggr_field_meta = new FieldMeta;
+        FieldMeta *aggr_field_meta = new FieldMeta();
         size_t attr_len;
         AttrType attr_type;
+        char *aggr_field_name;
+        if (relation_attr.aggr_type != NOT_AGGR) {
+          aggr_field_name = new char[10 + strlen(relation_attr.attribute_name)];
+          sprintf(aggr_field_name, "%s(%s)", aggr_name[relation_attr.aggr_type], relation_attr.attribute_name);
+        } else {
+          aggr_field_name = strdup(relation_attr.attribute_name);
+          rc = check_field_in_group(true, field_meta, group_by_keys);
+          if (rc != RC::SUCCESS) {
+            LOG_WARN("invalid field name. attr=%s", field_meta->name());
+            return rc;
+          }
+        }
         switch (relation_attr.aggr_type) {
+          case NOT_AGGR:
           case MIN:
           case MAX:
           case SUM:
@@ -166,9 +291,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
           case COUNT:
             attr_len = sizeof(int);
             attr_type = INTS;
+            break;
         }
-        char *aggr_field_name = new char[10 + strlen(relation_attr.attribute_name)];
-        sprintf(aggr_field_name, "%s(%s)", aggr_name[relation_attr.aggr_type], relation_attr.attribute_name);
         aggr_field_meta->init(aggr_field_name, attr_type, attr_offset, attr_len, true);
         query_fields.push_back(Field(table, aggr_field_meta, relation_attr.aggr_type, field_meta));
         attr_offset += attr_len;
@@ -188,12 +312,22 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
 
   // create filter statement in `where` statement
   FilterStmt *filter_stmt = nullptr;
-  RC rc = FilterStmt::create(db, default_table, &table_map,
-           select_sql.conditions, select_sql.condition_num, filter_stmt);
+  rc = FilterStmt::create(db, default_table, &table_map, select_sql.conditions, select_sql.condition_num, filter_stmt);
   if (rc != RC::SUCCESS) {
     LOG_WARN("cannot construct filter stmt");
     return rc;
   }
+
+  // create filter statement in `having` statement
+  FilterStmt *having_stmt = nullptr;
+  //   if (select_sql.is_aggr) {
+  //     RC rc = HavingStmt::create(
+  //         db, &table_map, select_sql.having_conditions, select_sql.having_condition_num, having_stmt);
+  //     if (rc != RC::SUCCESS) {
+  //       LOG_WARN("cannot construct filter stmt");
+  //       return rc;
+  //     }
+  //   }
 
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
@@ -201,9 +335,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   select_stmt->query_fields_.swap(query_fields);
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->do_aggr_ = select_sql.is_aggr;  // 告知执行器生成aggregate_operator
+  select_stmt->having_stmt_ = having_stmt;
+  select_stmt->group_keys_.swap(group_by_keys);
   stmt = select_stmt;
   return RC::SUCCESS;
 }
-
-void init_aggr_select(SelectStmt &select_stmt)
-{}
