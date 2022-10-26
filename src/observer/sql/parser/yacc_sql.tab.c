@@ -2032,7 +2032,7 @@ yyreduce:
 #line 453 "yacc_sql.y"
                                                        {
 			RelAttr attr;
-			relation_attr_init(&attr, NULL, (yyvsp[-2].string));
+			relation_attr_init(&attr, NULL, "*");
 			attr.aggr_type = (yyvsp[-4].number);
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 			CONTEXT->ssql->sstr.selection.is_aggr = 1;
