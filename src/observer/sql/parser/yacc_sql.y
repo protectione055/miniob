@@ -479,10 +479,6 @@ attr_list:
 			attr.aggr_type = $2;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 			CONTEXT->ssql->sstr.selection.is_aggr = 1;
-			relation_attr_init(&attr, NULL, $4);
-			attr.aggr_type = $2;
-			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
-			CONTEXT->ssql->sstr.selection.is_aggr = 1;
      	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
       }
