@@ -214,10 +214,10 @@ RC Db::recover()
           rc = table->recover_insert_record(&record);
           delete[] record_data;
         } break;
-        case CLogType::REDO_UPDATE: {
-          LOG_ERROR("recover for UPDATE not implemented yet!");
-          rc = RC::UNIMPLENMENT;
-        } break;
+        // case CLogType::REDO_UPDATE: {
+        //   LOG_ERROR("recover for UPDATE not implemented yet!");
+        //   rc = RC::UNIMPLENMENT;
+        // } break;
         case CLogType::REDO_DELETE: {
           Record record;
           record.set_rid(clog_record->log_record_.del.rid_);
