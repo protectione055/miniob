@@ -120,7 +120,7 @@ RC HashAggregateOperator::open()
             break;
           case SUM:
           case AVG:
-            assert(cur_cell.attr_type() != CHARS && child_cell.attr_type() != CHARS);
+            // assert(cur_cell.attr_type() != CHARS && child_cell.attr_type() != CHARS);
             if (!child_tuple->is_null_at(i)) {
               rc = cur_cell.add(child_cell);
               if (rc != RC::SUCCESS) {

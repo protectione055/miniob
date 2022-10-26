@@ -200,7 +200,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
 
           if (select_sql.is_aggr) {
             // select min/max/sum/avg/count(t.a), b from t group by b;
-            if ((relation_attr.aggr_type == SUM || relation_attr.aggr_type == AVG) && field_meta->type() == CHARS) {
+            if (relation_attr.aggr_type == SUM && field_meta->type() == CHARS) {
               return RC::MISMATCH;
             }
             FieldMeta *aggr_field_meta = new FieldMeta;
@@ -258,7 +258,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
       }
       if (select_sql.is_aggr) {
         // select min/max/sum/avg/count(a), b from t group by b;
-        if ((relation_attr.aggr_type == SUM || relation_attr.aggr_type == AVG) && field_meta->type() == CHARS) {
+        if (relation_attr.aggr_type == SUM && field_meta->type() == CHARS) {
           return RC::MISMATCH;
         }
         FieldMeta *aggr_field_meta = new FieldMeta();
