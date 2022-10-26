@@ -8,9 +8,10 @@
 #include "storage/common/table.h"
 #include <algorithm>
 
+std::vector<std::tuple<FieldExpr, int>> OrderOperator::order_fields_;
+
 RC OrderOperator::open()
 {
-  RC rc = RC::SUCCESS;
   if (children_.size() != 1) {
     LOG_WARN("predicate operator must has one child");
     return RC::INTERNAL;
@@ -23,7 +24,7 @@ RC OrderOperator::next()
 {
   RC rc = RC::SUCCESS;
   Operator *oper = children_[0];
-  if(false){//!skip){ 未实现，先跳过
+  if(!skip){
     if(!load_data){
       while (RC::SUCCESS == oper->next()) {
         Tuple *tuple = oper->current_tuple();
@@ -35,7 +36,8 @@ RC OrderOperator::next()
         tuple_list.push_back(tuple);
       }
       load_data = true;
-      // std::sort(tuple_list.begin(), tuple_list.end(), order_compare);  
+      std::sort(tuple_list.begin(), tuple_list.end(), OrderOperator::order_compare);  
+      return rc;
     }
     tuple_list.pop_back();
     if(tuple_list.empty()) return RC::RECORD_EOF;
@@ -47,7 +49,6 @@ RC OrderOperator::next()
         LOG_WARN("failed to get tuple from operator");
         break;
       }
-      test(tuple);
       return rc;
     }
   }
@@ -68,17 +69,17 @@ Tuple * OrderOperator::current_tuple()
     return children_[0]->current_tuple();
 }
 
-bool OrderOperator::test(Tuple *tuple){
-    RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
-    for(int i=0; i<order_fields_.size(); ++i){
-        FieldExpr expr = std::get<0>(order_fields_[i]);
-        int is_asc = std::get<1>(order_fields_[i]);
-        TupleCell cell;
-        expr.get_value(*row_tuple, cell);
-        LOG_INFO("test!");
-    }
-    return 1;
-}
+// bool OrderOperator::test(Tuple *tuple){
+//     RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
+//     for(int i=0; i<order_fields_.size(); ++i){
+//         FieldExpr expr = std::get<0>(order_fields_[i]);
+//         int is_asc = std::get<1>(order_fields_[i]);
+//         TupleCell cell;
+//         expr.get_value(*row_tuple, cell);
+//         LOG_INFO("test!");
+//     }
+//     return 1;
+// }
 
 bool OrderOperator::order_compare(const Tuple *A, const Tuple *B){
     for(int i=0; i<order_fields_.size(); ++i){

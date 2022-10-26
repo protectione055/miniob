@@ -460,7 +460,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
 
   HashAggregateOperator aggregate_oper(
       select_stmt->query_fields(), select_stmt->group_keys(), select_stmt->having_stmt());
-  OrderOperator order_oper(select_stmt->order_fields());
+  OrderOperator order_oper = OrderOperator(select_stmt->order_fields());
   if (select_stmt->do_aggregate()) {
     aggregate_oper.add_child(&pred_oper);
     order_oper.add_child(&aggregate_oper);
