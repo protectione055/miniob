@@ -650,6 +650,7 @@ RC ExecuteStage::do_insert(SQLStageEvent *sql_event)
   for(int i=0;i<tuple_amount;i++) {
     rc = table->insert_record(trx, value_amounts[i], tuple_values[i]);
     if(rc != RC::SUCCESS) {
+      session_event->set_response("FAILURE\n");
       return rc;
     }
   }
