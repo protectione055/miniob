@@ -41,6 +41,10 @@ public:
     children_.push_back(oper);
   }
 
+  std::vector<Operator *> get_children()
+  {
+    return children_;
+  }
 
 protected:
   std::vector<Operator *> children_;

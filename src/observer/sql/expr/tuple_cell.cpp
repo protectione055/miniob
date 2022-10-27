@@ -114,3 +114,38 @@ bool TupleCell::like(const TupleCell &other) const
   LOG_WARN("not supported");
   return false;
 }
+
+RC TupleCell::add(const TupleCell &other)
+{
+  RC rc = RC::SUCCESS;
+  //   if (other.attr_type() == CHARS) {
+  //     LOG_WARN("char arithmetic is not allowed");
+  //     return RC::MISMATCH;
+  //   }
+  Value value;
+  Value source = {other.attr_type(), const_cast<char *>(other.data())};
+  if (attr_type_ != other.attr_type()) {
+    rc = try_typecast(&value, source, attr_type_);
+  } else {
+    value.type = attr_type();
+    value.data = const_cast<char *>(other.data());
+  }
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("failed to typecast from type %d to %d", other.attr_type(), attr_type_);
+    return rc;
+  }
+  char *data = const_cast<char *>(data_);
+  switch (attr_type_) {
+    case INTS:
+      *(int *)data += *(int *)value.data;
+      break;
+    case FLOATS:
+      *(float *)data += *(float *)value.data;
+      break;
+    default:
+      LOG_WARN("cast unknown type to float, god knows what's gonna happen..");
+      *(float *)data += *(float *)value.data;
+      break;
+  }
+  return rc;
+}

@@ -41,6 +41,8 @@ public:
   
   bool like(const TupleCell &other) const;
 
+  RC add(const TupleCell &other);
+
   const char *data() const
   {
     return data_;

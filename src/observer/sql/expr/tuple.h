@@ -70,6 +70,11 @@ public:
   virtual RC  find_cell(const Field &field, TupleCell &cell) const = 0;
 
   virtual RC  cell_spec_at(int index, const TupleCellSpec *&spec) const = 0;
+
+  virtual bool is_null_at(int index) const
+  {
+    return false;
+  }
 };
 
 class RowTuple : public Tuple
@@ -228,4 +233,173 @@ public:
 private:
   std::vector<TupleCellSpec *> speces_;
   Tuple *tuple_ = nullptr;
+};
+
+// 查询结束即销毁的临时tuple
+class TempTuple : public Tuple {
+public:
+  TempTuple() = default;
+  virtual ~TempTuple()
+  {
+    for (TupleCellSpec *spec : speces_) {
+      delete spec;
+    }
+    speces_.clear();
+    if (record_.data() != nullptr) {
+      delete record_.data();
+    }
+  }
+
+  TempTuple(const TempTuple &t)
+  {
+    size_t data_len = 0.;
+    for (int i = 0; i < t.cell_num(); i++) {
+      TupleCell cell;
+      const TupleCellSpec *cell_spec;
+      t.cell_at(i, cell);
+      t.cell_spec_at(i, cell_spec);
+      data_len += cell.length();
+      FieldExpr *field_expr = (FieldExpr *)cell_spec->expression();
+      Field field = field_expr->field();
+      FieldExpr *new_field_expr = new FieldExpr(field.table(), field.meta());
+      TupleCellSpec *new_spec = new TupleCellSpec(new_field_expr);
+      this->speces_.push_back(new_spec);
+    }
+    char *data = nullptr;
+    if (data_len > 0) {
+      data = new char[data_len];
+      memcpy(data, t.record().data(), data_len);
+      record_.set_data(data);
+    }
+  }
+
+  TempTuple &operator=(const TempTuple &other)
+  {
+    if (&other != this) {
+      size_t data_len = 0.;
+      for (int i = 0; i < other.cell_num(); i++) {
+        TupleCell cell;
+        const TupleCellSpec *cell_spec;
+        other.cell_at(i, cell);
+        other.cell_spec_at(i, cell_spec);
+        data_len += cell.length();
+        FieldExpr *field_expr = (FieldExpr *)cell_spec->expression();
+        Field field = field_expr->field();
+        FieldExpr *new_field_expr = new FieldExpr(field.table(), field.meta());
+        TupleCellSpec *new_spec = new TupleCellSpec(new_field_expr);
+        this->speces_.push_back(new_spec);
+      }
+      char *data = nullptr;
+      if (data_len > 0) {
+        data = new char[data_len];
+        memcpy(data, other.record().data(), data_len);
+        record_.set_data(data);
+      }
+    }
+
+    return *this;
+  }
+
+  // 元组比较
+  int compare(const TempTuple &other) const
+  {
+    int res = 0;
+    if (&other == this) {
+      return res;
+    }
+    for (int i = 0; i < speces_.size(); i++) {
+      TupleCell this_cell, other_cell;
+      this->cell_at(i, this_cell);
+      other.cell_at(i, other_cell);
+      int cmp_res = this_cell.compare(other_cell);
+      if (cmp_res == 0)
+        continue;
+      else {
+        res = cmp_res;
+        break;
+      }
+    }
+    return res;
+  }
+
+  void set_schema(const std::vector<FieldMeta *> fields)
+  {
+    speces_.clear();
+    this->speces_.reserve(fields.size());
+    size_t data_len = 0;
+    for (FieldMeta *field : fields) {
+      data_len += field->len();
+      speces_.push_back(new TupleCellSpec(new FieldExpr(nullptr, field)));
+    }
+    char *data = new char[data_len];
+    memset(data, 0, data_len);
+    record_.set_data(data);
+  }
+
+  int cell_num() const override
+  {
+    return speces_.size();
+  }
+
+  RC cell_at(int index, TupleCell &cell) const override
+  {
+    if (index < 0 || index >= static_cast<int>(speces_.size())) {
+      LOG_WARN("invalid argument. index=%d", index);
+      return RC::INVALID_ARGUMENT;
+    }
+
+    const TupleCellSpec *spec = speces_[index];
+    FieldExpr *field_expr = (FieldExpr *)spec->expression();
+    const FieldMeta *field_meta = field_expr->field().meta();
+    cell.set_type(field_meta->type());
+    cell.set_data(this->record_.data() + field_meta->offset());
+    cell.set_length(field_meta->len());
+    return RC::SUCCESS;
+  }
+
+  RC find_cell(const Field &field, TupleCell &cell) const override
+  {
+    const char *field_name = field.field_name();
+    for (size_t i = 0; i < speces_.size(); ++i) {
+      const FieldExpr *field_expr = (const FieldExpr *)speces_[i]->expression();
+      const Field &field = field_expr->field();
+      if (0 == strcmp(field_name, field.field_name())) {
+        return cell_at(i, cell);
+      }
+    }
+    return RC::NOTFOUND;
+  }
+
+  RC cell_spec_at(int index, const TupleCellSpec *&spec) const override
+  {
+    if (index < 0 || index >= static_cast<int>(speces_.size())) {
+      LOG_WARN("invalid argument. index=%d", index);
+      return RC::INVALID_ARGUMENT;
+    }
+    spec = speces_[index];
+    return RC::SUCCESS;
+  }
+
+  Record &record()
+  {
+    return record_;
+  }
+
+  const Record &record() const
+  {
+    return record_;
+  }
+
+  void reset_data()
+  {
+    TupleCellSpec *last_cell = *(speces_.end() - 1);
+    FieldExpr *expr = (FieldExpr *)last_cell->expression();
+    const FieldMeta *last_meta = expr->field().meta();
+    size_t data_len = last_meta->offset() + last_meta->len();
+    memset(record_.data(), 0, data_len);
+  }
+
+private:
+  std::vector<TupleCellSpec *> speces_;
+  Record record_;
 };

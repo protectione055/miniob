@@ -1388,6 +1388,10 @@ if __name__ == '__main__':
   if result is False:
     exit_code = 1
   else:
-    logging.info(evaluation)
+    # logging.info(evaluation)
+    json_eval = json.loads(evaluation)
+    print(json_eval['message'])
+    print("score: " + str(json_eval['score']))
+    print("passed: " + str(json_eval['message'].count('success')) + '/' + str(json_eval['message'].count('is')))
   exit(exit_code)
 
