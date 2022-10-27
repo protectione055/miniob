@@ -643,8 +643,16 @@ RC ExecuteStage::do_insert(SQLStageEvent *sql_event)
 
   InsertStmt *insert_stmt = (InsertStmt *)stmt;
   Table *table = insert_stmt->table();
-
-  RC rc = table->insert_record(trx, insert_stmt->value_amount(), insert_stmt->values());
+  const Value **tuple_values = insert_stmt->tuple_values();
+  int tuple_amount = insert_stmt->tuple_amount();
+  const int *value_amounts = insert_stmt->value_amounts();
+  RC rc;
+  for(int i=0;i<tuple_amount;i++) {
+    rc = table->insert_record(trx, value_amounts[i], tuple_values[i]);
+    if(rc != RC::SUCCESS) {
+      return rc;
+    }
+  }
   if (rc == RC::SUCCESS) {
     if (!session->is_trx_multi_operation_mode()) {
       CLogRecord *clog_record = nullptr;
