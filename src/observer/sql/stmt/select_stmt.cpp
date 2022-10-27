@@ -59,9 +59,9 @@ RC check_field_in_group(bool is_aggr, const FieldMeta *field_meta, std::vector<F
 
 SelectStmt::~SelectStmt()
 {
-  if (nullptr != filter_stmt_) {
-    delete filter_stmt_;
-    filter_stmt_ = nullptr;
+  while (!filter_stmts_.empty()) {
+    delete filter_stmts_.back();
+    filter_stmts_.pop_back();
   }
 }
 
@@ -98,7 +98,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   // collect tables in `from` statement
   std::vector<Table *> tables;
   std::unordered_map<std::string, Table *> table_map;
-  for (size_t i = 0; i < select_sql.relation_num; i++) {
+  // 保证表的顺序与解析时一样
+  for (int i = select_sql.relation_num-1; i >= 0; i--) {
     const char *table_name = select_sql.relations[i];
     if (nullptr == table_name) {
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
@@ -345,18 +346,31 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     }
   }
 
-  Table *default_table = nullptr;
-  if (tables.size() == 1) {
-    default_table = tables[0];
-  }
-
   // create filter statement in `where` statement
+  std::vector<FilterStmt *> filter_stmts;
   FilterStmt *filter_stmt = nullptr;
-  rc = FilterStmt::create(db, default_table, &table_map, select_sql.conditions, select_sql.condition_num, filter_stmt);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("cannot construct filter stmt");
-    return rc;
+  if (tables.size() == 1) {
+    Table *default_table = nullptr;
+    default_table = tables[0];
+    RC rc = FilterStmt::create(db, default_table, &table_map,
+          select_sql.conditions, select_sql.condition_num, filter_stmt);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("cannot construct filter stmt");
+      return rc;
+    }
+    filter_stmts.push_back(filter_stmt);
+  }else{//分开每个table对应的filter，常数型filter放在第一位。多表情况下每个attr必须有relation
+    for(size_t i=0; i<select_sql.relation_num; i++){
+      RC rc = FilterStmt::create_by_table(db, tables[i], &table_map,
+            select_sql.conditions, select_sql.condition_num, filter_stmt);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("cannot construct filter stmt");
+        return rc;
+      }
+      filter_stmts.push_back(filter_stmt);
+    }
   }
+  filter_stmt = nullptr;
 
   // create filter statement in `having` statement
   FilterStmt *having_stmt = nullptr;
@@ -374,7 +388,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   select_stmt->tables_.swap(tables);
   select_stmt->query_fields_.swap(query_fields);
   select_stmt->order_fields_.swap(order_fields);
-  select_stmt->filter_stmt_ = filter_stmt;
+  select_stmt->filter_stmts_.swap(filter_stmts);
   select_stmt->do_aggr_ = select_sql.is_aggr;  // 告知执行器生成aggregate_operator
   select_stmt->having_stmt_ = having_stmt;
   select_stmt->group_keys_.swap(group_by_keys);

@@ -441,21 +441,24 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   SelectStmt *select_stmt = (SelectStmt *)(sql_event->stmt());
   SessionEvent *session_event = sql_event->session_event();
   RC rc = RC::SUCCESS;
+
+
   if (select_stmt->tables().size() != 1) {
-    LOG_WARN("select more than 1 tables is not supported");
+    for(int i=0; i<select_stmt->tables().size(); i++){
+      Operator *scan_oper = try_to_create_index_scan_operator(select_stmt->filter_stmts(i));
+    }
     rc = RC::UNIMPLENMENT;
     return rc;
   }
 
-  // 创建执行计划
-  Operator *scan_oper = try_to_create_index_scan_operator(select_stmt->filter_stmt());
+  Operator *scan_oper = try_to_create_index_scan_operator(select_stmt->filter_stmts(0));
   if (nullptr == scan_oper) {
     scan_oper = new TableScanOperator(select_stmt->tables()[0]);
   }
 
   DEFER([&] () {delete scan_oper;});
 
-  PredicateOperator pred_oper(select_stmt->filter_stmt());
+  PredicateOperator pred_oper(select_stmt->filter_stmts(0));
   pred_oper.add_child(scan_oper);
 
   HashAggregateOperator aggregate_oper(

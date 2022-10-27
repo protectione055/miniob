@@ -93,6 +93,13 @@ public:
   static RC create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
 			       const Condition &condition, FilterUnit *&filter_unit);
 
+  static RC create_by_table(Db *db, Table *table, std::unordered_map<std::string, Table *> *tables,
+			const Condition *conditions, int condition_num,
+			FilterStmt *&stmt);
+
+  static RC create_table_filter_unit(Db *db, Table *table, std::unordered_map<std::string, Table *> *tables,
+			       const Condition &condition, FilterUnit *&filter_unit);
+
 private:
   std::vector<FilterUnit *>  filter_units_; // 默认当前都是AND关系
 };

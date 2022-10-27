@@ -131,3 +131,83 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
 
   return rc;
 }
+
+RC FilterStmt::create_by_table(Db *db, Table *table, std::unordered_map<std::string, Table *> *tables,
+		      const Condition *conditions, int condition_num,
+		      FilterStmt *&stmt)
+{
+  RC rc = RC::SUCCESS;
+  stmt = nullptr;
+
+  FilterStmt *tmp_stmt = new FilterStmt();
+  for (int i = 0; i < condition_num; i++) {
+    FilterUnit *filter_unit = nullptr;
+    rc = create_table_filter_unit(db, table, tables, conditions[i], filter_unit);
+    if (rc != RC::SUCCESS) {
+      if (rc == RC::MISMATCH) continue;
+      delete tmp_stmt;
+      LOG_WARN("failed to create filter unit. condition index=%d", i);
+      return rc;
+    }
+    tmp_stmt->filter_units_.push_back(filter_unit);
+  }
+
+  stmt = tmp_stmt;
+  return RC::SUCCESS;
+}
+
+RC FilterStmt::create_table_filter_unit(Db *db, Table *table, std::unordered_map<std::string, Table *> *tables,
+				  const Condition &condition, FilterUnit *&filter_unit)
+{
+  RC rc = RC::SUCCESS;
+  
+  CompOp comp = condition.comp;
+  if (comp < EQUAL_TO || comp >= NO_OP) {
+    LOG_WARN("invalid compare operator : %d", comp);
+    return RC::INVALID_ARGUMENT;
+  }
+
+  Expression *left = nullptr;
+  Expression *right = nullptr;
+  AttrType left_type, right_type;
+  if (condition.left_is_attr) {
+    if(strcmp(condition.left_attr.relation_name, table->name())!=0) return RC::MISMATCH;
+    Table *temp = nullptr;
+    const FieldMeta *field = nullptr;
+    rc = get_table_and_field(db, nullptr, tables, condition.left_attr, temp, field);  
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("cannot find attr");
+      return rc;
+    }
+    left_type = field->type();
+    left = new FieldExpr(table, field);
+  } else {
+    left_type = condition.left_value.type;
+    left = new ValueExpr(condition.left_value);
+  }
+
+  if (condition.right_is_attr) {
+    if(strcmp(condition.left_attr.relation_name, table->name())!=0) return RC::MISMATCH;
+    Table *temp = nullptr;
+    const FieldMeta *field = nullptr;
+    rc = get_table_and_field(db, nullptr, tables, condition.right_attr, temp, field);  
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("cannot find attr");
+      delete left;
+      return rc;
+    }
+    right_type = field->type();
+    right = new FieldExpr(table, field);
+  } else {
+    right_type = condition.right_value.type;
+    right = new ValueExpr(condition.right_value);
+  }
+
+  filter_unit = new FilterUnit;
+  filter_unit->set_comp(comp);
+  filter_unit->set_left(left);
+  filter_unit->set_right(right);
+
+  return rc;
+}
+

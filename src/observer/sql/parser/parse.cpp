@@ -146,6 +146,10 @@ void selects_append_relation(Selects *selects, const char *relation_name)
 {
   selects->relations[selects->relation_num++] = strdup(relation_name);
 }
+void selects_append_joincond(Selects *selects, Condition condition)
+{
+  selects->join_conds[selects->join_cond_num++] = condition;
+}
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num)
 {
   assert(condition_num <= sizeof(selects->conditions) / sizeof(selects->conditions[0]));
@@ -183,6 +187,10 @@ void selects_destroy(Selects *selects)
     selects->relations[i] = NULL;
   }
   selects->relation_num = 0;
+
+  for (size_t i = 0; i < selects->join_cond_num; i++) {
+    condition_destroy(&selects->join_conds[i]);
+  }
 
   for (size_t i = 0; i < selects->condition_num; i++) {
     condition_destroy(&selects->conditions[i]);

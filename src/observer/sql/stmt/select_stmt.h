@@ -21,6 +21,8 @@ See the Mulan PSL v2 for more details. */
 #include "storage/common/field.h"
 #include "sql/expr/expression.h"
 
+#define MAX_NUM 20
+
 class FieldMeta;
 class FilterStmt;
 class Db;
@@ -41,7 +43,7 @@ public:
   const std::vector<Table *> &tables() const { return tables_; }
   const std::vector<Field> &query_fields() const { return query_fields_; }
   const std::vector<std::tuple<FieldExpr, int>> &order_fields() const { return order_fields_; }
-  FilterStmt *filter_stmt() const { return filter_stmt_; }
+  FilterStmt *filter_stmts(int index) const { return filter_stmts_[index]; }
   FilterStmt *having_stmt() const
   {
     return having_stmt_;
@@ -56,7 +58,7 @@ private:
   std::vector<Field> query_fields_;
   std::vector<std::tuple<FieldExpr, int>> order_fields_;
   std::vector<Table *> tables_;
-  FilterStmt *filter_stmt_ = nullptr;
+  std::vector<FilterStmt *>filter_stmts_;
   bool do_aggr_ = false;
   FilterStmt *having_stmt_ = nullptr;
   std::vector<Field> group_keys_;
