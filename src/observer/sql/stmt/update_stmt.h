@@ -32,14 +32,16 @@ public:
 
 public:
   Table *table() const {return table_;}
-  const char *attribute() { return attribute_name_; }
-  const Value *value() const { return &value_; }
+  const char **attributes() { return attribute_names_; }
+  const Value *values() const { return values_; }
+  int attribute_num() const { return attribute_num_; }
   FilterStmt *filter_stmt() const { return filter_stmt_; }
 
 private:
   Table *table_ = nullptr;
-  const char *attribute_name_ = nullptr;
-  Value value_;
+  int attribute_num_;
+  const char **attribute_names_ = nullptr;
+  Value *values_;
   FilterStmt *filter_stmt_ = nullptr;
 };
 

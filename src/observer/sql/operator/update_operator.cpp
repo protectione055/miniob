@@ -43,7 +43,8 @@ RC UpdateOperator::open()
 
     RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
     Record &record = row_tuple->record();
-    rc = table->update_record(trx_, &record, update_stmt_->attribute(), update_stmt_->value());
+
+    rc = table->update_record(trx_, &record, update_stmt_->attributes(), update_stmt_->values(), update_stmt_->attribute_num());
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to update record: %s", strrc(rc));
       return rc;

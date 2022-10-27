@@ -686,7 +686,7 @@ RC Table::create_index(Trx *trx, const char *index_name, const char **attribute_
   return rc;
 }
 
-RC Table::update_record(Trx *trx, Record *record, const char *attribute_name, const Value *value)
+RC Table::update_record(Trx *trx, Record *record, const char **attribute_names, const Value *values, int attribute_num)
 {
   RC rc = RC::SUCCESS;
   
@@ -699,7 +699,7 @@ RC Table::update_record(Trx *trx, Record *record, const char *attribute_name, co
   // skip over sys_fields
   int num_sys_fields = table_meta_.sys_field_num();
   int num_values = tuple.cell_num() - num_sys_fields;
-  Value *values = new Value[num_values];
+  Value *newvalues = new Value[num_values];
   for (int i = num_sys_fields; i < tuple.cell_num(); i++) { 
     rc = tuple.cell_at(i, cell);
     if (rc != RC::SUCCESS) {
@@ -714,21 +714,26 @@ RC Table::update_record(Trx *trx, Record *record, const char *attribute_name, co
     // does not check rc since it's not expected for anything to fail
     const FieldExpr * field_expr = (const FieldExpr *)spec->expression();
     const Field &field = field_expr->field();
-    if (strcmp(attribute_name, field.field_name()) == 0) {
-      // is the field we want to update
-      values[i - num_sys_fields] = *value;
-    } else {
-      values[i - num_sys_fields] = Value{cell.attr_type(), (void*)cell.data()};
+    bool modified = false;
+    for(int j=0;j<attribute_num;j++) {
+      if (strcmp(attribute_names[j], field.field_name()) == 0) {
+        // is the field we want to update
+        newvalues[i - num_sys_fields] = values[j];
+        modified = true;
+      }
+    }
+    if(!modified) {
+      newvalues[i - num_sys_fields] = Value{cell.attr_type(), (void*)cell.data()};
     }
   }
   char *new_record_data = nullptr;
-  rc = make_record(num_values, values, new_record_data); // implicit copy of values assumed
+  rc = make_record(num_values, newvalues, new_record_data); // implicit copy of newvalues assumed
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to rebuild record data in update (rid=%d.%d). rc=%d:%s",
             record->rid().page_num, record->rid().slot_num, rc, strrc(rc));
     return rc;
   }
-  delete[] values;
+  delete[] newvalues;
 
   // delete old index for record
   rc = delete_entry_of_indexes(record->data(), record->rid(), false);  // 重复代码 refer to commit_delete
@@ -745,7 +750,7 @@ RC Table::update_record(Trx *trx, Record *record, const char *attribute_name, co
   rc = insert_entry_of_indexes(record->data(), record->rid());
   if (rc != RC::SUCCESS) {
     // TODO should probably rollback (insert the original index back)  
-    // i did't do it here, basically we are screwed if the insert_entry_of_indexes failed
+    // i did't do it here, basically we are screwed if insert_entry_of_indexes failed
     LOG_ERROR("Failed to reinsert indexes of record for update (rid=%d.%d). rc=%d:%s",
                 record->rid().page_num, record->rid().slot_num, rc, strrc(rc));
     return rc;
