@@ -13,7 +13,7 @@ std::vector<std::tuple<FieldExpr, int>> OrderOperator::order_fields_;
 RC OrderOperator::open()
 {
   if (children_.size() != 1) {
-    LOG_WARN("predicate operator must has one child");
+    LOG_WARN("order operator must has one child");
     return RC::INTERNAL;
   }
   
@@ -33,10 +33,12 @@ RC OrderOperator::next()
           LOG_WARN("failed to get tuple from operator");
           break;
         }
-        tuple_list.push_back(tuple);
+        //由于子节点取到的tuple可能在同一物理位置，next后被覆盖，因此对其进行深拷贝
+        TempTuple *new_tuple = new TempTuple(*tuple);
+        tuple_list.push_back(new_tuple);
       }
-      load_data = true;
-      std::sort(tuple_list.begin(), tuple_list.end(), OrderOperator::order_compare);  
+      load_data = true; 
+      std::stable_sort(tuple_list.begin(), tuple_list.end(), OrderOperator::order_compare);  
       return rc;
     }
     tuple_list.pop_back();

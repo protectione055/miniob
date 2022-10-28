@@ -173,6 +173,8 @@ RC HashAggregateOperator::next()
   if (first_fetch_) {
     first_fetch_ = false;
     iter_ = tuples_.begin();
+  } else {
+    iter_++;
   }
   while (iter_ != tuples_.end() && !having(iter_->second, having_stmt_)) {
     iter_++;
@@ -197,7 +199,6 @@ Tuple *HashAggregateOperator::current_tuple()
 {
   assert(iter_ != tuples_.end());
   Tuple *current_tuple = iter_->second;
-  iter_++;
   return current_tuple;
 }
 

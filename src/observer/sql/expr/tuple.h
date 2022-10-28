@@ -273,6 +273,36 @@ public:
     }
   }
 
+  TempTuple(const Tuple &t)
+  {
+    size_t data_len = 0.;
+    for (int i = 0; i < t.cell_num(); i++) {
+      TupleCell cell;
+      const TupleCellSpec *cell_spec;
+      t.cell_at(i, cell);
+      t.cell_spec_at(i, cell_spec);
+      data_len += cell.length();
+      FieldExpr *field_expr = (FieldExpr *)cell_spec->expression();
+      Field field = field_expr->field();
+      FieldExpr *new_field_expr = new FieldExpr(field.table(), field.meta());
+      TupleCellSpec *new_spec = new TupleCellSpec(new_field_expr);
+      this->speces_.push_back(new_spec);
+    }
+
+    char *data = nullptr;
+    if (data_len > 0) {
+      data = new char[data_len];
+      int offset = 0;
+      for (int i = 0; i < t.cell_num(); i++) {
+        TupleCell cell;
+        t.cell_at(i, cell);
+        memcpy(data + offset, cell.data(), cell.length());
+        offset += cell.length();
+      }
+    }
+    record_.set_data(data);
+  }
+
   TempTuple &operator=(const TempTuple &other)
   {
     if (&other != this) {
