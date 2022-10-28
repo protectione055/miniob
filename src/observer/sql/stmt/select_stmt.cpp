@@ -243,18 +243,26 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
         }
       }
     } else {
-      // 字段没有指定表名
-      if (tables.size() != 1) {
+      //查找属性名对应的table，多个表中不能有重复的属性名
+      Table *table = nullptr;
+      for (Table *t : tables) {
+        if (!table && t->table_meta().field(relation_attr.attribute_name)) {
+          table = t;
+        } else if (table && t->table_meta().field(relation_attr.attribute_name)) {
+          break;
+        }
+      }
+      if (!table) {
         LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name);
         return RC::SCHEMA_FIELD_MISSING;
       }
 
-      Table *table = tables[0];
       const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name);
       if (nullptr == field_meta) {
         LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name);
         return RC::SCHEMA_FIELD_MISSING;
       }
+
       if (select_sql.is_aggr) {
         // select min/max/sum/avg/count(a), b from t group by b;
         if (relation_attr.aggr_type == SUM && field_meta->type() == CHARS) {
@@ -304,14 +312,15 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
 
   LOG_INFO("got %d tables in from stmt and %d fields in query stmt", tables.size(), query_fields.size());
 
-  Table *default_table = nullptr;
-  if (tables.size() == 1) {
-    default_table = tables[0];
-  }
+//   Table *default_table = nullptr;
+//   if (tables.size() == 1) {
+//     default_table = tables[0];
+//   }
 
   // create filter statement in `where` statement
   FilterStmt *filter_stmt = nullptr;
-  rc = FilterStmt::create(db, default_table, &table_map, select_sql.conditions, select_sql.condition_num, filter_stmt);
+  RC rc = FilterStmt::create(db, nullptr, &table_map,
+           select_sql.conditions, select_sql.condition_num, filter_stmt);
   if (rc != RC::SUCCESS) {
     LOG_WARN("cannot construct filter stmt");
     return rc;

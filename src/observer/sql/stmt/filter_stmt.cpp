@@ -55,7 +55,15 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
 		       const RelAttr &attr, Table *&table, const FieldMeta *&field)
 {
   if (common::is_blank(attr.relation_name)) {
-    table = default_table;
+    // table = default_table;
+    for (auto table_info : *tables) {
+      if (!table && table_info.second->table_meta().field(attr.attribute_name)) {
+        table = table_info.second;
+      } else if (table && table_info.second->table_meta().field(attr.attribute_name)) {
+        LOG_WARN("invalid. I do not know the attr's table. attr=%s", attr.attribute_name);
+        return SCHEMA_FIELD_MISSING;
+      }
+    }
   } else if (nullptr != tables) {
     auto iter = tables->find(std::string(attr.relation_name));
     if (iter != tables->end()) {

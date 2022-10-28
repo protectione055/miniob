@@ -44,7 +44,7 @@ public:
   {
     return having_stmt_;
   }
-  std::vector<Field> &group_keys()
+  const std::vector<Field> &group_keys() const
   {
     return group_keys_;
   }
