@@ -304,6 +304,47 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
 
   LOG_INFO("got %d tables in from stmt and %d fields in query stmt", tables.size(), query_fields.size());
 
+  
+  // collect order fields in `Order By` statement
+  std::vector<std::tuple<FieldExpr, int>> order_fields;
+  for (int i = select_sql.order_num - 1; i >= 0; i--) {
+    const OrderAttr &order_attr = select_sql.orders[i];
+
+    if (!common::is_blank(order_attr.relation_name)) {
+      const char *table_name = order_attr.relation_name;
+      const char *field_name = order_attr.attribute_name;
+
+      auto iter = table_map.find(table_name);
+      if (iter == table_map.end()) {
+        LOG_WARN("no such table in from list: %s", table_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+
+      Table *table = iter->second;
+      const FieldMeta *field_meta = table->table_meta().field(field_name);
+      if (nullptr == field_meta) {
+        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+      order_fields.push_back(std::make_tuple(FieldExpr(table, field_meta), order_attr.is_asc));
+  
+    } else {
+      if (tables.size() != 1) {
+        LOG_WARN("invalid. I do not know the attr's table. attr=%s", order_attr.attribute_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+
+      Table *table = tables[0];
+      const FieldMeta *field_meta = table->table_meta().field(order_attr.attribute_name);
+      if (nullptr == field_meta) {
+        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), order_attr.attribute_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+
+      order_fields.push_back(std::make_tuple(FieldExpr(table, field_meta), order_attr.is_asc));
+    }
+  }
+
   Table *default_table = nullptr;
   if (tables.size() == 1) {
     default_table = tables[0];
@@ -332,6 +373,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   SelectStmt *select_stmt = new SelectStmt();
   select_stmt->tables_.swap(tables);
   select_stmt->query_fields_.swap(query_fields);
+  select_stmt->order_fields_.swap(order_fields);
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->do_aggr_ = select_sql.is_aggr;  // 告知执行器生成aggregate_operator
   select_stmt->having_stmt_ = having_stmt;

@@ -30,6 +30,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/table_scan_operator.h"
 #include "sql/operator/index_scan_operator.h"
 #include "sql/operator/predicate_operator.h"
+#include "sql/operator/order_operator.h"
 #include "sql/operator/update_operator.h"
 #include "sql/operator/delete_operator.h"
 #include "sql/operator/project_operator.h"
@@ -459,13 +460,16 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
 
   HashAggregateOperator aggregate_oper(
       select_stmt->query_fields(), select_stmt->group_keys(), select_stmt->having_stmt());
-  ProjectOperator project_oper;
+  OrderOperator order_oper = OrderOperator(select_stmt->order_fields());
   if (select_stmt->do_aggregate()) {
     aggregate_oper.add_child(&pred_oper);
-    project_oper.add_child(&aggregate_oper);
+    order_oper.add_child(&aggregate_oper);
   } else {
-    project_oper.add_child(&pred_oper);
+    order_oper.add_child(&pred_oper);
   }
+
+  ProjectOperator project_oper;
+  project_oper.add_child(&order_oper);
 
   // 初始化project_operator
   for (const Field &field : select_stmt->query_fields()) {

@@ -114,7 +114,10 @@ ParserContext *get_context(yyscan_t scanner)
 		NOT_TOKEN
         HAVING
 		GROUP
+		ORDER
 		BY
+		ASC
+
 %union {
   struct _Attr *attr;
   struct _Condition *condition1;
@@ -144,6 +147,7 @@ ParserContext *get_context(yyscan_t scanner)
 %type <value1> value;
 %type <number> number;
 %type <number> aggregate;
+%type <number> order_type;
 
 %%
 
@@ -324,6 +328,12 @@ type:
        | FLOAT_T { $$=FLOATS; }
 	   | DATE_T { $$=DATES; }
        ;
+order_type:
+
+    /* empty */ { $$=1; }
+	   | ASC  { $$=1; }
+       | DESC { $$=0; }
+       ;
 ID_get:
 	ID 
 	{
@@ -406,7 +416,7 @@ update_attr:
 update_attr_list:
 	/* empty */ | COMMA update_attr update_attr_list {}
 select:				/*  select 语句的语法解析树*/
-    SELECT select_attr FROM ID rel_list where group_by having SEMICOLON
+    SELECT select_attr FROM ID rel_list where order group_by having SEMICOLON
 		{
 			// CONTEXT->ssql->sstr.selection.relations[CONTEXT->from_length++]=$4;
 			selects_append_relation(&CONTEXT->ssql->sstr.selection, $4);
@@ -814,6 +824,37 @@ having_condition:
 			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
     	}
     ;
+order:
+    /* empty */ 
+    | ORDER BY order_attr {	
+		
+			}
+    ;
+order_attr:
+	ID order_type order_list{
+			OrderAttr attr;
+			order_attr_init(&attr, NULL, $1, $2);
+			selects_append_orders(&CONTEXT->ssql->sstr.selection, &attr);
+		}
+  	| ID DOT ID order_type order_list {
+			OrderAttr attr;
+			order_attr_init(&attr, $1, $3, $4);
+			selects_append_orders(&CONTEXT->ssql->sstr.selection, &attr);
+		}
+    ;
+order_list:
+    /* empty */
+    | COMMA ID order_type order_list{
+			OrderAttr attr;
+			order_attr_init(&attr, NULL, $2, $3);
+			selects_append_orders(&CONTEXT->ssql->sstr.selection, &attr);
+      }
+    | COMMA ID DOT ID order_type order_list{
+			OrderAttr attr;
+			order_attr_init(&attr, $2, $4, $5);
+			selects_append_orders(&CONTEXT->ssql->sstr.selection, &attr);
+  	  }
+  	;
 
 comOp:
   	  EQ { CONTEXT->comp = EQUAL_TO; }

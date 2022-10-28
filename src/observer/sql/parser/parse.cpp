@@ -32,13 +32,29 @@ void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const
   relation_attr->aggr_type = NOT_AGGR;
   relation_attr->attribute_name = strdup(attribute_name);
 }
-
 void relation_attr_destroy(RelAttr *relation_attr)
 {
   free(relation_attr->relation_name);
   free(relation_attr->attribute_name);
   relation_attr->relation_name = nullptr;
   relation_attr->attribute_name = nullptr;
+}
+void order_attr_init(OrderAttr *order_attr, const char *relation_name, const char *attribute_name, const int is_asc)
+{
+  if (relation_name != nullptr) {
+    order_attr->relation_name = strdup(relation_name);
+  } else {
+    order_attr->relation_name = nullptr;
+  }
+  order_attr->attribute_name = strdup(attribute_name);
+  order_attr->is_asc = is_asc;
+}
+void order_attr_destroy(OrderAttr *order_attr)
+{
+  free(order_attr->relation_name);
+  free(order_attr->attribute_name);
+  order_attr->relation_name = nullptr;
+  order_attr->attribute_name = nullptr;
 }
 
 void value_init_integer(Value *value, int v)
@@ -130,7 +146,6 @@ void selects_append_relation(Selects *selects, const char *relation_name)
 {
   selects->relations[selects->relation_num++] = strdup(relation_name);
 }
-
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num)
 {
   assert(condition_num <= sizeof(selects->conditions) / sizeof(selects->conditions[0]));
@@ -152,7 +167,10 @@ void selects_append_having_conditions(Selects *selects, Condition conditions[], 
   }
   selects->having_condition_num = condition_num;
 }
-
+void selects_append_orders(Selects *selects, OrderAttr *order_attr)
+{
+  selects->orders[selects->order_num++] = *order_attr;
+}
 void selects_destroy(Selects *selects)
 {
   for (size_t i = 0; i < selects->attr_num; i++) {
@@ -170,6 +188,11 @@ void selects_destroy(Selects *selects)
     condition_destroy(&selects->conditions[i]);
   }
   selects->condition_num = 0;
+
+  for (size_t i = 0; i < selects->order_num; i++) {
+    order_attr_destroy(&selects->orders[i]);
+  }
+  selects->attr_num = 0;
 }
 
 void inserts_init(Inserts *inserts, const char *relation_name)
