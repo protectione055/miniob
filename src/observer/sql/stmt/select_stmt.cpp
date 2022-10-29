@@ -63,6 +63,11 @@ SelectStmt::~SelectStmt()
     delete filter_stmts_.back();
     filter_stmts_.pop_back();
   }
+
+  delete join_stmt_;
+  join_stmt_ = nullptr;
+  delete having_stmt_;
+  having_stmt_ = nullptr;
 }
 
 static RC wildcard_fields(
@@ -137,7 +142,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
       group_by_keys.push_back(Field(table, field_meta, NOT_AGGR, nullptr));
     }
   }
-
+  
   // collect query fields in `select` statement
   std::vector<Field> query_fields;
   size_t attr_offset = 0;
@@ -372,6 +377,10 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   }
   filter_stmt = nullptr;
 
+  FilterStmt *join_stmt = nullptr;
+  RC rc = FilterStmt::create(db, nullptr, &table_map,
+        select_sql.join_conds, select_sql.join_cond_num, join_stmt);
+
   // create filter statement in `having` statement
   FilterStmt *having_stmt = nullptr;
   //   if (select_sql.is_aggr) {
@@ -389,6 +398,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   select_stmt->query_fields_.swap(query_fields);
   select_stmt->order_fields_.swap(order_fields);
   select_stmt->filter_stmts_.swap(filter_stmts);
+  select_stmt->join_stmt_ = join_stmt;
   select_stmt->do_aggr_ = select_sql.is_aggr;  // 告知执行器生成aggregate_operator
   select_stmt->having_stmt_ = having_stmt;
   select_stmt->group_keys_.swap(group_by_keys);
