@@ -1,7 +1,7 @@
 #!/bin/bash
-# build miniob
+# 以release模式编译
 
-rmm -rf build
+rm -rf build
 mkdir -p build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_ASAN=ON .. 
 make $@

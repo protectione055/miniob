@@ -203,6 +203,7 @@ ParserContext *get_context(yyscan_t scanner)
 		GROUP
 		BY
 		IN_TOKEN
+		NULLABLE
 %union {
   struct _Attr *attr;
   struct _Condition *condition1;
@@ -394,6 +395,28 @@ attr_def:
 			CONTEXT->value_length++;
 		}
     |ID_get TEXT_T
+		{
+			AttrInfo attribute;
+			attr_info_init(&attribute, CONTEXT->id, CHARS, 4096);
+			create_table_append_attribute(&CONTEXT->ssql->sstr.create_table, &attribute);
+			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name=(char*)malloc(sizeof(char));
+			// strcpy(CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name, CONTEXT->id); 
+			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].type=$2;  
+			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].length=4; // default attribute length
+			CONTEXT->value_length++;
+		}
+	    |ID_get type NULLABLE
+		{
+			AttrInfo attribute;
+			attr_info_init(&attribute, CONTEXT->id, $2, 4);
+			create_table_append_attribute(&CONTEXT->ssql->sstr.create_table, &attribute);
+			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name=(char*)malloc(sizeof(char));
+			// strcpy(CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name, CONTEXT->id); 
+			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].type=$2;  
+			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].length=4; // default attribute length
+			CONTEXT->value_length++;
+		}
+    |ID_get TEXT_T NULLABLE
 		{
 			AttrInfo attribute;
 			attr_info_init(&attribute, CONTEXT->id, CHARS, 4096);

@@ -149,9 +149,9 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     Query query;
     query.flag = SCF_SELECT;
     query.sstr.selection = *(Selects *)condition.right_query;
-    Stmt::create_stmt(db, query, stmt);
-    if (dynamic_cast<SelectStmt *>(stmt)->query_fields().size() > 1) {
-      LOG_WARN("too much argument in subquery");
+    rc = Stmt::create_stmt(db, query, stmt);
+    if (rc != RC::SUCCESS || dynamic_cast<SelectStmt *>(stmt)->query_fields().size() > 1) {
+      LOG_WARN("invalid argument in subquery");
       return RC::INVALID_ARGUMENT;
     }
     right = new SubQueryExpr(stmt);
