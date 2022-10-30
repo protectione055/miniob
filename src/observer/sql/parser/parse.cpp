@@ -71,6 +71,13 @@ void value_destroy(Value *value)
   value->data = nullptr;
 }
 
+void subquery_destroy(void **query)
+{
+  LOG_DEBUG("destroy subquery");
+  free((Selects *)*query);
+  *query = nullptr;
+}
+
 void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
     int right_is_attr, RelAttr *right_attr, Value *right_value)
 {
@@ -109,7 +116,8 @@ void condition_init_with_subquery(Condition *condition, CompOp comp, CondExprTyp
       condition->left_value = *left_value;
       break;
     case SUB_QUERY:
-      condition->left_query = left_query;
+      condition->left_query = (Selects *)malloc(sizeof(Selects));
+      memcpy(condition->left_query, left_query, sizeof(Selects));
       break;
   }
 
@@ -121,7 +129,8 @@ void condition_init_with_subquery(Condition *condition, CompOp comp, CondExprTyp
       condition->right_value = *right_value;
       break;
     case SUB_QUERY:
-      condition->right_query = right_query;
+      condition->right_query = (Selects *)malloc(sizeof(Selects));
+      memcpy(condition->right_query, right_query, sizeof(Selects));
       break;
   }
 }
@@ -132,11 +141,16 @@ void condition_destroy(Condition *condition)
     relation_attr_destroy(&condition->left_attr);
   } else if (condition->left_expr_type == VALUE){
     value_destroy(&condition->left_value);
+  } else {
+    subquery_destroy(&condition->left_query);
   }
+
   if (condition->right_expr_type == ATTR) {
     relation_attr_destroy(&condition->right_attr);
   } else if (condition->right_expr_type == VALUE) {
     value_destroy(&condition->right_value);
+  } else {
+    subquery_destroy(&condition->right_query);
   }
 }
 

@@ -39,8 +39,9 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
   FilterStmt *tmp_stmt = new FilterStmt();
   for (int i = 0; i < condition_num; i++) {
     FilterUnit *filter_unit = nullptr;
-    // TODO: add support for aggregation query
+    
     rc = create_filter_unit(db, default_table, tables, conditions[i], filter_unit);
+    
     if (rc != RC::SUCCESS) {
       delete tmp_stmt;
       LOG_WARN("failed to create filter unit. condition index=%d", i);

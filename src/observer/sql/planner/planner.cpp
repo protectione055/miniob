@@ -20,6 +20,8 @@ RC Planner::create_executor(Operator *&root)
 RC Planner::destroy_executor(Operator *&root)
 {
   // do nothing
+  
+  return RC::SUCCESS;
 }
 
 RC Planner::create_select_plan(SelectStmt *select_stmt, Operator *&root)
@@ -32,6 +34,7 @@ RC Planner::create_select_plan(SelectStmt *select_stmt, Operator *&root)
   assert(tables.size() == 1);  // 在单表查询下测试
   if (tables.size() == 1) {
     // 单表查询尝试使用索引扫描
+    
     scan_oper = try_to_create_index_scan_operator(select_stmt->filter_stmt());
     if (nullptr == scan_oper) {
       scan_oper = new TableScanOperator(select_stmt->tables()[0]);
@@ -65,8 +68,10 @@ RC Planner::create_select_plan(SelectStmt *select_stmt, Operator *&root)
         new HashAggregateOperator(select_stmt->query_fields(), select_stmt->group_keys(), select_stmt->having_stmt());
     aggregate_oper->add_child(pred_oper);
     project_oper->add_child(aggregate_oper);
+    
   } else {
     project_oper->add_child(pred_oper);
+    
   }
 
   // 给project_operator设定投影关系

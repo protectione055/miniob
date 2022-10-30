@@ -246,7 +246,7 @@ public:
     }
     speces_.clear();
     if (record_.data() != nullptr) {
-      delete record_.data();
+      free(record_.data());
     }
   }
 
@@ -365,8 +365,8 @@ public:
       data_len += field->len();
       speces_.push_back(new TupleCellSpec(new FieldExpr(nullptr, field)));
     }
-    char *data = new char[data_len];
-    memset(data, 0, data_len);
+    char *data = (char *)malloc(sizeof(char) * data_len);
+    memset(data, 0, sizeof(char) * data_len);
     record_.set_data(data);
   }
 

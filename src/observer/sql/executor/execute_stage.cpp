@@ -453,6 +453,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   Planner planner(select_stmt);
   Operator *root;
   rc = planner.create_executor(root);
+  
   if(rc != RC::SUCCESS) {
 	LOG_ERROR("failed to create execute plan");
     session_event->set_response("FAILURE\n");
@@ -460,7 +461,9 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   }
 
   ProjectOperator *project_oper = (ProjectOperator *)root;
+  
   rc = project_oper->open();
+  
   if (rc != RC::SUCCESS) {
     LOG_ERROR("failed to open executer");
     session_event->set_response("FAILURE\n");
@@ -471,9 +474,11 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   std::stringstream ss;
   print_tuple_header(ss, *project_oper);
   while ((rc = project_oper->next()) == RC::SUCCESS) {
+    
     // get current record
     // write to response
     Tuple * tuple = project_oper->current_tuple();
+    
     if (nullptr == tuple) {
       rc = RC::INTERNAL;
       LOG_WARN("failed to get current record. rc=%s", strrc(rc));
@@ -489,11 +494,13 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
     session_event->set_response("FAILED\n");
     project_oper->close();
   } else {
+    
     rc = project_oper->close();
     session_event->set_response(ss.str());
   }
-
+  
   planner.destroy_executor(root);
+  
   return rc;
 }
 

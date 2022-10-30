@@ -806,21 +806,23 @@ condition:
 	{
 		RelAttr left_attr;
 		relation_attr_init(&left_attr, NULL, $1);
-		Query *right_sub_query = $3;
+		Query *right_subquery = $3;
 
 		Condition condition;
-		condition_init_with_subquery(&condition, CONTEXT->comp, ATTR, &left_attr, NULL, NULL, SUB_QUERY, NULL, NULL, &right_sub_query->sstr.selection);
+		condition_init_with_subquery(&condition, CONTEXT->comp, ATTR, &left_attr, NULL, NULL, SUB_QUERY, NULL, NULL, &right_subquery->sstr.selection);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		free(right_subquery);
 	}
 	| ID DOT ID comOp sub_query
 	{
 		RelAttr left_attr;
 		relation_attr_init(&left_attr, $1, $3);
-		Query *right_sub_query = $5;
+		Query *right_subquery = $5;
 
 		Condition condition;
-		condition_init_with_subquery(&condition, CONTEXT->comp, ATTR, &left_attr, NULL, NULL, SUB_QUERY, NULL, NULL, &right_sub_query->sstr.selection);
+		condition_init_with_subquery(&condition, CONTEXT->comp, ATTR, &left_attr, NULL, NULL, SUB_QUERY, NULL, NULL, &right_subquery->sstr.selection);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		free(right_subquery);
 	}
 	| sub_query comOp ID
 	{
@@ -831,6 +833,7 @@ condition:
 		Condition condition;
 		condition_init_with_subquery(&condition, CONTEXT->comp, SUB_QUERY, NULL, NULL, &left_subquery->sstr.selection, ATTR, &right_attr, NULL, NULL);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		free(left_subquery);
 	}
 	| sub_query comOp ID DOT ID
 	{
@@ -841,6 +844,7 @@ condition:
 		Condition condition;
 		condition_init_with_subquery(&condition, CONTEXT->comp, SUB_QUERY, NULL, NULL, &left_subquery->sstr.selection, ATTR, &right_attr, NULL, NULL);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		free(left_subquery);
 	}
     ;
 sub_query:
