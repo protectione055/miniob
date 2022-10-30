@@ -66,6 +66,38 @@ public:
     return right_;
   }
 
+  // 制造新的filter_unit，语义不变但交换左右
+  RC commutation(FilterUnit *filter_unit) const
+  {
+    filter_unit->set_left(right_);
+    filter_unit->set_right(left_);
+    switch (comp_) {
+      case EQUAL_TO: {
+        filter_unit->set_comp(EQUAL_TO);
+      } break;
+      case LESS_EQUAL: {
+        filter_unit->set_comp(GREAT_THAN);
+      } break;
+      case NOT_EQUAL: {
+        filter_unit->set_comp(NOT_EQUAL);
+      } break;
+      case LESS_THAN: {
+        filter_unit->set_comp(GREAT_EQUAL);
+      } break;
+      case GREAT_EQUAL: {
+        filter_unit->set_comp(LESS_THAN);
+      } break;
+      case GREAT_THAN: {
+        filter_unit->set_comp(LESS_EQUAL);
+      } break;
+      default: {
+        return RC::MISMATCH;
+      } break;
+    }
+
+    return RC::SUCCESS;
+  }
+
 private:
   CompOp comp_ = NO_OP;
   Expression *left_ = nullptr;

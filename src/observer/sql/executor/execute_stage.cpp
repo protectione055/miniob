@@ -456,14 +456,13 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
     if (nullptr == scan_oper) {
       scan_oper = new TableScanOperator(table);
     }  
-    PredicateOperator pred_oper(filter_stmt);
-    pred_oper.add_child(scan_oper);
-    table_operator_map[table->table_meta().name()] = &pred_oper;
+    PredicateOperator *pred_oper = new PredicateOperator(filter_stmt);
+    pred_oper->add_child(scan_oper);
+    table_operator_map[table->table_meta().name()] = pred_oper;
   }
 
-  // DEFER([&] () {delete scan_oper;});
-
   Operator *join_oper = JoinOperator::create_join_tree(table_operator_map, select_stmt->join_stmt());
+  DEFER([&] () {delete join_oper;});
 
   HashAggregateOperator aggregate_oper(
       select_stmt->query_fields(), select_stmt->group_keys(), select_stmt->having_stmt());
@@ -479,8 +478,10 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   project_oper.add_child(&order_oper);
 
   // 初始化project_operator
+  bool multi_table = false;
+  if (select_stmt->tables().size() > 1) multi_table = true;
   for (const Field &field : select_stmt->query_fields()) {
-    project_oper.add_projection(field.table(), field.meta());
+    project_oper.add_projection(field.table(), field.meta(), multi_table);
   }
   rc = project_oper.open();
   if (rc != RC::SUCCESS) {

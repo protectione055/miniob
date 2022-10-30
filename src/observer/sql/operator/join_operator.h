@@ -30,11 +30,11 @@ enum JoinState{
 class JoinOperator : public Operator
 {
 public:
-  JoinOperator(Operator *left, Operator *right, const FilterUnit *join_cond)
+  JoinOperator(Operator *left, Operator *right, std::vector<const FilterUnit *> join_conds)
   {
     left_ = left;
     right_ = right;
-    join_cond_ = join_cond;
+    join_conds_.swap(join_conds);
   }
 
   ~JoinOperator()
@@ -48,6 +48,8 @@ public:
         delete j;
       }
     }
+    delete left_;
+    delete right_;
   }
 
   RC open() override;
@@ -57,16 +59,21 @@ public:
   Tuple * current_tuple() override;
   
   static Operator * create_join_tree(std::unordered_map<std::string, Operator*> table_operator_map, FilterStmt *join_conds);
+  bool do_predicate(Tuple *tuple);
+public:
+  static std::unordered_map<std::string, std::string> fathers;
 
 private:
   Operator *left_ = nullptr;
   Operator *right_ = nullptr;
-  bool hashtable_created_ = false;
   JoinState join_state_ = BUILD_TABLE;
-  FilterUnit *join_cond_ = nullptr;
+  std::vector<const FilterUnit *> join_conds_;
   std::unordered_map<std::string, std::vector<Tuple *>> hash_table_;
   std::vector<Tuple *> result_table_;
   std::vector<Tuple *> cur_bucket_;
-  TempTuple *right_tuple_ = nullptr;
+  Tuple *right_tuple_ = nullptr;
   int pos_ = 0;
+
+  bool do_nestloop_ = true;
+  std::vector<Tuple *> left_tuples_;
 };

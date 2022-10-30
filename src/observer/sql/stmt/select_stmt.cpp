@@ -364,7 +364,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
       return rc;
     }
     filter_stmts.push_back(filter_stmt);
-  }else{//分开每个table对应的filter，常数型filter放在第一位。多表情况下每个attr必须有relation
+  }else{//分开每个table对应的filter，两边都是常数的filter存放在所有table中
     for(size_t i=0; i<select_sql.relation_num; i++){
       RC rc = FilterStmt::create_by_table(db, tables[i], &table_map,
             select_sql.conditions, select_sql.condition_num, filter_stmt);
@@ -377,9 +377,14 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   }
   filter_stmt = nullptr;
 
+  // 创建join相关conds列表
   FilterStmt *join_stmt = nullptr;
-  RC rc = FilterStmt::create(db, nullptr, &table_map,
+  rc = FilterStmt::create(db, nullptr, &table_map,
         select_sql.join_conds, select_sql.join_cond_num, join_stmt);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("cannot construct join filter stmt");
+    return rc;
+  }
 
   // create filter statement in `having` statement
   FilterStmt *having_stmt = nullptr;
