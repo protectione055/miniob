@@ -41,6 +41,8 @@ typedef struct {
   AggrType aggr_type;    // aggregate type				聚合类型
 } RelAttr;
 
+typedef enum { ATTR, VALUE, SUB_QUERY } CondExprType;
+
 typedef enum {
   EQUAL_TO,     //"="     0
   LESS_EQUAL,   //"<="    1
@@ -50,6 +52,8 @@ typedef enum {
   GREAT_THAN,   //">"     5
   LIKE,         //"like"  6
   NOT_LIKE,     //"not like"  7
+  IN,           //"in"    8
+  NOT_IN,       //"not in"    9
   NO_OP
 } CompOp;
 
@@ -69,15 +73,22 @@ typedef struct _Value {
 } Value;
 
 typedef struct _Condition {
-  int left_is_attr;    // TRUE if left-hand side is an attribute
-                       // 1时，操作符左边是属性名，0时，是属性值
-  Value left_value;    // left-hand side value if left_is_attr = FALSE
-  RelAttr left_attr;   // left-hand side attribute
-  CompOp comp;         // comparison operator
-  int right_is_attr;   // TRUE if right-hand side is an attribute
-                       // 1时，操作符右边是属性名，0时，是属性值
-  RelAttr right_attr;  // right-hand side attribute if right_is_attr = TRUE 右边的属性
-  Value right_value;   // right-hand side value if right_is_attr = FALSE
+  // int left_is_query;  // 1时，操作符左边是子查询
+  CondExprType left_expr_type;
+  void *left_query;
+  int left_is_attr;   // TRUE if left-hand side is an attribute
+                      // 1时，操作符左边是属性名，0时，是属性值
+  Value left_value;   // left-hand side value if left_is_attr = FALSE && left_is_query == FALSE
+  RelAttr left_attr;  // left-hand side attribute
+  CompOp comp;        // comparison operator
+                      //   int right_is_attr;   // TRUE if right-hand side is an attribute
+                      // 1时，操作符右边是属性名，0时，是属性值
+  CondExprType right_expr_type;
+  int right_is_attr;
+  RelAttr right_attr;  // right-hand side attribute if right_is_attr = TRUE
+  Value right_value;   // right-hand side value if right_is_attr = FALSE && right_is_query == FALSE
+                       //   int right_is_query;  // 1时，操作符右边是子查询
+  void *right_query;
 } Condition;
 
 // struct of select
@@ -275,6 +286,12 @@ void query_init(Query *query);
 Query *query_create();  // create and init
 void query_reset(Query *query);
 void query_destroy(Query *query);  // reset and delete
+
+void selects_append_groupkey(Selects *selects, RelAttr *rel_attr);
+
+void condition_init_with_subquery(Condition *condition, CompOp comp, CondExprType left_expr_type, RelAttr *left_attr,
+    Value *left_value, Selects *left_query, CondExprType right_expr_type, RelAttr *right_attr, Value *right_value,
+    Selects *right_query);
 
 #ifdef __cplusplus
 }

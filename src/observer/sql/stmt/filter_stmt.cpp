@@ -15,9 +15,11 @@ See the Mulan PSL v2 for more details. */
 #include "rc.h"
 #include "common/log/log.h"
 #include "common/lang/string.h"
+#include "sql/stmt/select_stmt.h"
 #include "sql/stmt/filter_stmt.h"
 #include "storage/common/db.h"
 #include "storage/common/table.h"
+#include "sql/expr/subquery_expression.h"
 
 FilterStmt::~FilterStmt()
 {
@@ -101,25 +103,36 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   Expression *left = nullptr;
   Expression *right = nullptr;
   AttrType left_type, right_type;
-  if (condition.left_is_attr) {
+  if (condition.left_expr_type == ATTR) {
     Table *table = nullptr;
     const FieldMeta *field = nullptr;
-    rc = get_table_and_field(db, default_table, tables, condition.left_attr, table, field);  
+    rc = get_table_and_field(db, default_table, tables, condition.left_attr, table, field);
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot find attr");
       return rc;
     }
     left_type = field->type();
     left = new FieldExpr(table, field);
-  } else {
+  } else if (condition.left_expr_type == VALUE) {
     left_type = condition.left_value.type;
     left = new ValueExpr(condition.left_value);
+  } else if (condition.left_expr_type == SUB_QUERY) {
+    Stmt *stmt = nullptr;
+    Query query;
+    query.flag = SCF_SELECT;
+    query.sstr.selection = *(Selects *)condition.left_query;
+    Stmt::create_stmt(db, query, stmt);
+    if (dynamic_cast<SelectStmt *>(stmt)->query_fields().size() > 1) {
+      LOG_WARN("too much argument in subquery");
+      return RC::INVALID_ARGUMENT;
+    }
+    left = new SubQueryExpr(stmt);
   }
 
-  if (condition.right_is_attr) {
+  if (condition.right_expr_type == ATTR) {
     Table *table = nullptr;
     const FieldMeta *field = nullptr;
-    rc = get_table_and_field(db, default_table, tables, condition.right_attr, table, field);  
+    rc = get_table_and_field(db, default_table, tables, condition.right_attr, table, field);
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot find attr");
       delete left;
@@ -127,9 +140,20 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     }
     right_type = field->type();
     right = new FieldExpr(table, field);
-  } else {
+  } else if (condition.right_expr_type == VALUE) {
     right_type = condition.right_value.type;
     right = new ValueExpr(condition.right_value);
+  } else if (condition.right_expr_type == SUB_QUERY) {
+    Stmt *stmt = nullptr;
+    Query query;
+    query.flag = SCF_SELECT;
+    query.sstr.selection = *(Selects *)condition.right_query;
+    Stmt::create_stmt(db, query, stmt);
+    if (dynamic_cast<SelectStmt *>(stmt)->query_fields().size() > 1) {
+      LOG_WARN("too much argument in subquery");
+      return RC::INVALID_ARGUMENT;
+    }
+    right = new SubQueryExpr(stmt);
   }
 
   filter_unit = new FilterUnit;

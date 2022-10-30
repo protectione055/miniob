@@ -273,6 +273,39 @@ public:
     }
   }
 
+  TempTuple(const Tuple *other)
+  {
+    std::vector<FieldMeta *> fields;
+    size_t first_offset = 0;
+    for (size_t i = 0; i < other->cell_num(); i++) {
+      const TupleCellSpec *cell_spec = nullptr;
+      other->cell_spec_at(i, cell_spec);
+      FieldExpr *field_expr = (FieldExpr *)cell_spec->expression();
+      const FieldMeta *field_meta = field_expr->field().meta();
+      if (i == 0) {
+        // 记录第一个可见字段的offset，临时tuple中不保存sys_fields
+        first_offset = field_meta->offset();
+      }
+      FieldMeta *new_field_meta = new FieldMeta();
+      new_field_meta->init(field_meta->name(),
+          field_meta->type(),
+          field_meta->offset() - first_offset,
+          field_meta->len(),
+          field_meta->visible());
+      fields.push_back(new_field_meta);
+    }
+    this->set_schema(fields);
+
+    size_t offset = 0;
+    for (size_t i = 0; i < other->cell_num(); i++) {
+      FieldMeta *field_meta = fields[i];
+      TupleCell cell;
+      other->cell_at(i, cell);
+      memcpy(this->record_.data() + offset, cell.data(), field_meta->len());
+      offset += field_meta->len();
+    }
+  }
+
   TempTuple &operator=(const TempTuple &other)
   {
     if (&other != this) {
@@ -303,11 +336,12 @@ public:
   // 元组比较
   int compare(const TempTuple &other) const
   {
+    assert(this->speces_.size() == other.speces_.size());
     int res = 0;
     if (&other == this) {
       return res;
     }
-    for (int i = 0; i < speces_.size(); i++) {
+    for (size_t i = 0; i < speces_.size(); i++) {
       TupleCell this_cell, other_cell;
       this->cell_at(i, this_cell);
       other.cell_at(i, other_cell);
@@ -402,4 +436,67 @@ public:
 private:
   std::vector<TupleCellSpec *> speces_;
   Record record_;
+};
+
+class Key {
+public:
+  Key() = default;
+  ~Key() = default;
+
+  //需要深拷贝
+  Key(const Key &other)
+  {
+    this->key_ = other.key_;
+  }
+
+  Key &operator=(const Key &other)
+  {
+    if (this != &other) {
+      key_ = TempTuple(other.key_);
+    }
+    return *this;
+  }
+
+  RC init(std::vector<Field> &group_by_keys, const Tuple &tuple)
+  {
+    RC rc = RC::SUCCESS;
+
+    // 构造key schema
+    std::vector<FieldMeta *> key_fieldmetas;
+    size_t offset = 0;
+    for (const Field &field : group_by_keys) {
+      const FieldMeta *field_meta = field.meta();
+      FieldMeta *key_meta = new FieldMeta();
+      key_meta->init(field_meta->name(), field_meta->type(), offset, field_meta->len(), true);
+      key_fieldmetas.push_back(key_meta);
+      offset += key_meta->len();
+    }
+    key_.set_schema(key_fieldmetas);
+
+    // 拷贝数据到key
+    for (int i = 0; i < key_.cell_num(); i++) {
+      TupleCell tuple_cell;
+      rc = tuple.find_cell(group_by_keys[i], tuple_cell);
+      if (rc != RC::SUCCESS) {
+        LOG_ERROR("failed to find cell in tuple");
+        return rc;
+      }
+      TupleCell key_cell;
+      rc = key_.cell_at(i, key_cell);
+      if (rc != RC::SUCCESS) {
+        LOG_ERROR("failed to find cell in key");
+        return rc;
+      }
+      memcpy(const_cast<char *>(key_cell.data()), tuple_cell.data(), key_cell.length());
+    }
+    return rc;
+  }
+
+  bool operator<(const Key &other) const
+  {
+    return (key_.compare(other.key_) < 0);
+  }
+
+private:
+  TempTuple key_;
 };

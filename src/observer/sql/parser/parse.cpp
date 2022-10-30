@@ -75,30 +75,67 @@ void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr
     int right_is_attr, RelAttr *right_attr, Value *right_value)
 {
   condition->comp = comp;
-  condition->left_is_attr = left_is_attr;
   if (left_is_attr) {
+    condition->left_expr_type = ATTR;
     condition->left_attr = *left_attr;
   } else {
+    condition->left_expr_type = VALUE;
     condition->left_value = *left_value;
   }
 
-  condition->right_is_attr = right_is_attr;
   if (right_is_attr) {
+    condition->right_expr_type = ATTR;
     condition->right_attr = *right_attr;
   } else {
+    condition->right_expr_type = VALUE;
     condition->right_value = *right_value;
   }
 }
+
+// ATTR/VALUE/SUB_QUERY
+void condition_init_with_subquery(Condition *condition, CompOp comp, CondExprType left_expr_type, RelAttr *left_attr,
+    Value *left_value, Selects *left_query, CondExprType right_expr_type, RelAttr *right_attr, Value *right_value,
+    Selects *right_query)
+{
+  condition->comp = comp;
+  condition->left_expr_type = left_expr_type;
+  condition->right_expr_type = right_expr_type;
+  // 确定Select结构体可以直接赋值？
+  switch (left_expr_type) {
+    case ATTR:
+      condition->left_attr = *left_attr;
+      break;
+    case VALUE:
+      condition->left_value = *left_value;
+      break;
+    case SUB_QUERY:
+      condition->left_query = left_query;
+      break;
+  }
+
+  switch (right_expr_type) {
+    case ATTR:
+      condition->right_attr = *right_attr;
+      break;
+    case VALUE:
+      condition->right_value = *right_value;
+      break;
+    case SUB_QUERY:
+      condition->right_query = right_query;
+      break;
+  }
+}
+
 void condition_destroy(Condition *condition)
 {
-  if (condition->left_is_attr) {
+  if (condition->left_expr_type == ATTR) {
     relation_attr_destroy(&condition->left_attr);
-  } else {
+  } else if (condition->left_expr_type == VALUE){
     value_destroy(&condition->left_value);
   }
-  if (condition->right_is_attr) {
+  if (condition->right_expr_type == ATTR) {
     relation_attr_destroy(&condition->right_attr);
-  } else {
+  } else if (condition->right_expr_type == VALUE) {
     value_destroy(&condition->right_value);
   }
 }

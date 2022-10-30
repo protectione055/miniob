@@ -10,6 +10,20 @@
 #include<stdlib.h>
 #include<string.h>
 
+// 保存查询解析上下文的临时结构体，遇到子查询时被入栈
+typedef struct QueryContext {
+  Query* ssql;
+  size_t select_length;
+  size_t condition_length;
+  size_t having_condition_length;
+  size_t from_length;
+  size_t value_length;
+  Value values[MAX_NUM];
+  Condition conditions[MAX_NUM];
+  Condition having_conditions[MAX_NUM];
+  CompOp comp;
+} QueryContext;
+
 typedef struct ParserContext {
   Query * ssql;
   size_t select_length;
@@ -22,7 +36,80 @@ typedef struct ParserContext {
   Condition having_conditions[MAX_NUM];
   CompOp comp;
   char id[MAX_NUM];
+  QueryContext query_stack[MAX_NUM];
+  size_t query_stack_depth;
 } ParserContext;
+
+
+void query_stack_push(ParserContext *context)
+{
+  QueryContext *stack = context->query_stack;
+  size_t depth = context->query_stack_depth;
+  // 保存当前ParserContext状态
+  memcpy(&stack[depth], context, sizeof(QueryContext));
+//   stack[depth].query = context->ssql;
+//   stack[depth].select_length = context->select_length;
+//   stack[depth].condition_length = context->condition_length;
+//   stack[depth].having_condition_length = context->having_condition_length;
+//   stack[depth].from_length = context->from_length;
+//   stack[depth].value_length = context->value_length;
+//   stack[depth].comp = context->comp;
+
+//   for(int i = 0; i < context->value_length; i++) {
+//     stack[depth].values[i] = context->values[i];
+//   }
+//   for(int i = 0; i < context->condition_length; i++) {
+//     stack[depth].conditions[i] = context->conditions[i];
+//   }
+//     for(int i = 0; i < context->having_condition_length; i++) {
+//     stack[depth].having_conditions[i] = context->having_conditions[i];
+//   }
+  
+  // 初始化ParserContext
+  context->ssql = query_create();
+  context->query_stack_depth++;
+  context->select_length  = 0;
+  context->condition_length  = 0;
+  context->having_condition_length  = 0;
+  context->from_length  = 0;
+  context->value_length  = 0;
+  printf("query_stack_push: stack-depth:=%d, context->condition_length=%d, context->value_length=%d", context->query_stack_depth, context->condition_length, context->value_length);
+}
+
+void query_stack_pop(ParserContext *context)
+{
+  QueryContext *stack = context->query_stack;
+  size_t depth = context->query_stack_depth - 1;
+  memcpy(context, &stack[depth], sizeof(QueryContext));
+  // 恢复ParserContext状态
+//   context->ssql = stack[depth].ssql;
+//   query_destroy(context->ssql);
+//   context->select_length = stack[depth].select_length;
+//   context->condition_length = stack[depth].condition_length;
+//   context->having_condition_length = stack[depth].having_condition_length;
+//   context->from_length = stack[depth].from_length;
+//   context->value_length = stack[depth].value_length;
+//   context->comp = stack[depth].comp;
+  
+//   for(int i = 0; i < context->value_length; i++) {
+//     context->values[i] = stack[depth].values[i];
+//   }
+//   for(int i = 0; i < context->condition_length; i++) {
+//     context->conditions[i] = stack[depth].conditions[i];
+//   }
+//     for(int i = 0; i < context->having_condition_length; i++) {
+//     context->having_conditions[i] = stack[depth].having_conditions[i];
+//   }
+  
+  // 删除栈顶子查询
+  stack[depth].ssql = NULL;
+  stack[depth].select_length  = 0;
+  stack[depth].condition_length  = 0;
+  stack[depth].having_condition_length  = 0;
+  stack[depth].from_length = 0;
+  stack[depth].value_length = 0;
+  context->query_stack_depth--;
+}
 
 //获取子串
 char *substr(const char *s,int n1,int n2)/*从s中提取下标为n1~n2的字符组成一个新字符串，然后返回这个新串的首地址*/
@@ -115,6 +202,7 @@ ParserContext *get_context(yyscan_t scanner)
         HAVING
 		GROUP
 		BY
+		IN_TOKEN
 %union {
   struct _Attr *attr;
   struct _Condition *condition1;
@@ -123,6 +211,7 @@ ParserContext *get_context(yyscan_t scanner)
   int number;
   float floats;
   char *position;
+  Query*query;
 }
 
 %token <number> NUMBER
@@ -144,6 +233,7 @@ ParserContext *get_context(yyscan_t scanner)
 %type <value1> value;
 %type <number> number;
 %type <number> aggregate;
+%type <query> sub_query
 
 %%
 
@@ -712,7 +802,71 @@ condition:
 			// $$->right_attr.relation_name=$5;
 			// $$->right_attr.attribute_name=$7;
     	}
+	| ID comOp sub_query
+	{
+		RelAttr left_attr;
+		relation_attr_init(&left_attr, NULL, $1);
+		Query *right_sub_query = $3;
+
+		Condition condition;
+		condition_init_with_subquery(&condition, CONTEXT->comp, ATTR, &left_attr, NULL, NULL, SUB_QUERY, NULL, NULL, &right_sub_query->sstr.selection);
+		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+	}
+	| ID DOT ID comOp sub_query
+	{
+		RelAttr left_attr;
+		relation_attr_init(&left_attr, $1, $3);
+		Query *right_sub_query = $5;
+
+		Condition condition;
+		condition_init_with_subquery(&condition, CONTEXT->comp, ATTR, &left_attr, NULL, NULL, SUB_QUERY, NULL, NULL, &right_sub_query->sstr.selection);
+		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+	}
+	| sub_query comOp ID
+	{
+		RelAttr right_attr;
+		relation_attr_init(&right_attr, NULL, $3);
+		Query *left_subquery = $1;
+
+		Condition condition;
+		condition_init_with_subquery(&condition, CONTEXT->comp, SUB_QUERY, NULL, NULL, &left_subquery->sstr.selection, ATTR, &right_attr, NULL, NULL);
+		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+	}
+	| sub_query comOp ID DOT ID
+	{
+		RelAttr right_attr;
+		relation_attr_init(&right_attr, $3, $5);
+		Query *left_subquery = $1;
+		
+		Condition condition;
+		condition_init_with_subquery(&condition, CONTEXT->comp, SUB_QUERY, NULL, NULL, &left_subquery->sstr.selection, ATTR, &right_attr, NULL, NULL);
+		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+	}
     ;
+sub_query:
+    sub_query_init select_attr FROM ID rel_list where group_by having RBRACE {
+		selects_append_relation(&CONTEXT->ssql->sstr.selection, $4);
+
+		selects_append_conditions(&CONTEXT->ssql->sstr.selection, CONTEXT->conditions, CONTEXT->condition_length);
+
+		CONTEXT->ssql->flag=SCF_SELECT;//"select";
+		// CONTEXT->ssql->sstr.selection.attr_num = CONTEXT->select_length;
+		$$ = CONTEXT->ssql;
+        
+		query_stack_pop(CONTEXT);
+		//临时变量清零
+		CONTEXT->condition_length=0;
+		CONTEXT->from_length=0;
+		CONTEXT->select_length=0;
+		CONTEXT->value_length = 0;
+	}
+	;
+sub_query_init:
+   LBRACE SELECT {
+	// 将当前状态入栈
+	query_stack_push(CONTEXT);
+   }
+   ;
 having:
 	| HAVING having_condition having_condition_list {
 
@@ -824,6 +978,8 @@ comOp:
     | NE { CONTEXT->comp = NOT_EQUAL; }
     | LIKE_TOKEN { CONTEXT->comp = LIKE; }
     | NOT_TOKEN LIKE_TOKEN { CONTEXT->comp = NOT_LIKE; }
+	| IN_TOKEN {CONTEXT->comp = IN;}
+	| NOT_TOKEN IN_TOKEN {CONTEXT->comp = NOT_IN;}
     ;
 
 load_data:

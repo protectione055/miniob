@@ -1,6 +1,7 @@
 %{
 #include<string.h>
 #include<stdio.h>
+#include "parse_defs.h"
 
 struct ParserContext;
 
@@ -84,6 +85,8 @@ QUOTE            [\'\"]
 [Hh][Aa][Vv][Ii][Nn][Gg]							 RETURN_TOKEN(HAVING);
 [Gg][Rr][Oo][Uu][Pp]                                 RETURN_TOKEN(GROUP);
 [Bb][Yy]											 RETURN_TOKEN(BY);
+[Ii][Nn]											 RETURN_TOKEN(IN_TOKEN);
+
 
 {ID}                                                 yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                                  RETURN_TOKEN(LBRACE);
