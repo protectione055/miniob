@@ -39,15 +39,15 @@ public:
 
   ~JoinOperator()
   {
-    for (auto i : result_table_)
-    {
-      delete i;
+    for (Tuple *result_tuple : result_table_) {
+      delete result_tuple;
     }
-    for (auto i : hash_table_) {
-      for(auto j : i.second) {
-        delete j;
+    for (std::pair<std::string, std::vector<Tuple *>> str_tuples_pair : hash_table_) {
+      for (Tuple *tuple : str_tuples_pair.second) {
+        delete tuple;
       }
     }
+    //递归释放内存
     delete left_;
     delete right_;
   }
