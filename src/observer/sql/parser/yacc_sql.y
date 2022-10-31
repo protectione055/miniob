@@ -620,9 +620,16 @@ join_cond:
 			RelAttr right_attr;
 			relation_attr_init(&right_attr, $5, $7);
 
-			Condition condition;
-			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
-			selects_append_joincond(&CONTEXT->ssql->sstr.selection, condition);
+			// 判断是否同一表中的两个属性。若否，条件加入join中
+			if (strcmp($1, $5) != 0){
+				Condition condition;
+				condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+				selects_append_joincond(&CONTEXT->ssql->sstr.selection, condition);
+			} else {
+				Condition condition;
+				condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+				CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+			}
     	}
     ;
 where:
@@ -770,9 +777,16 @@ condition:
 			RelAttr right_attr;
 			relation_attr_init(&right_attr, $5, $7);
 
-			Condition condition;
-			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
-			selects_append_joincond(&CONTEXT->ssql->sstr.selection, condition);
+			// 判断是否同一表中的两个属性。若否，条件加入join中
+			if (strcmp($1, $5) != 0){
+				Condition condition;
+				condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+				selects_append_joincond(&CONTEXT->ssql->sstr.selection, condition);
+			} else {
+				Condition condition;
+				condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+				CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+			}
     	}
     ;
 having:
