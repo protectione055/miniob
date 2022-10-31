@@ -115,7 +115,9 @@ ParserContext *get_context(yyscan_t scanner)
         HAVING
 		GROUP
 		ORDER
-		BY
+		BY		
+		INNER
+		JOIN
 		ASC
 
 %union {
@@ -564,6 +566,64 @@ rel_list:
     | COMMA ID rel_list {	
 				selects_append_relation(&CONTEXT->ssql->sstr.selection, $2);
 		  }
+    | INNER JOIN ID ON join_cond join_cond_list join_list {	
+				selects_append_relation(&CONTEXT->ssql->sstr.selection, $3);
+		  }
+    ;
+join_list:
+    /* empty */
+    | INNER JOIN ID ON join_cond join_cond_list join_list {	
+				selects_append_relation(&CONTEXT->ssql->sstr.selection, $3);
+		  }
+    ;
+join_cond_list:
+    /* empty */
+    | AND join_cond join_cond_list {
+				// CONTEXT->conditions[CONTEXT->condition_length++]=*$2;
+		  }
+    ;
+join_cond:
+    value comOp value 
+		{
+			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 2];
+			Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 0, NULL, right_value);
+			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		}
+    |ID DOT ID comOp value
+		{
+			RelAttr left_attr;
+			relation_attr_init(&left_attr, $1, $3);
+			Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, right_value);
+			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+    	}
+    |value comOp ID DOT ID
+		{
+			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 1];
+
+			RelAttr right_attr;
+			relation_attr_init(&right_attr, $3, $5);
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 1, &right_attr, NULL);
+			CONTEXT->conditions[CONTEXT->condition_length++] = condition;		
+    	}
+    |ID DOT ID comOp ID DOT ID
+		{
+			RelAttr left_attr;
+			relation_attr_init(&left_attr, $1, $3);
+			RelAttr right_attr;
+			relation_attr_init(&right_attr, $5, $7);
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+			selects_append_joincond(&CONTEXT->ssql->sstr.selection, condition);
+    	}
     ;
 where:
     /* empty */ 
@@ -712,15 +772,7 @@ condition:
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
-			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
-			// $$=( Condition *)malloc(sizeof( Condition));
-			// $$->left_is_attr = 1;		//属性
-			// $$->left_attr.relation_name=$1;
-			// $$->left_attr.attribute_name=$3;
-			// $$->comp =CONTEXT->comp;
-			// $$->right_is_attr = 1;		//属性
-			// $$->right_attr.relation_name=$5;
-			// $$->right_attr.attribute_name=$7;
+			selects_append_joincond(&CONTEXT->ssql->sstr.selection, condition);
     	}
     ;
 having:

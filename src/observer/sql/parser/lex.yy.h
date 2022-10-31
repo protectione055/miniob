@@ -356,6 +356,7 @@ extern int yylex \
 #undef YY_DECL
 #endif
 
+<<<<<<< HEAD
 #ifndef yy_create_buffer_ALREADY_DEFINED
 #undef yy_create_buffer
 #endif
@@ -502,6 +503,9 @@ extern int yylex \
 #endif
 
 #line 102 "lex_sql.l"
+=======
+#line 96 "lex_sql.l"
+>>>>>>> 16ea068 (implement join metadata from parse to do_select)
 
 
 #line 508 "lex.yy.h"

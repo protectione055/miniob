@@ -59,10 +59,15 @@ RC check_field_in_group(bool is_aggr, const FieldMeta *field_meta, std::vector<F
 
 SelectStmt::~SelectStmt()
 {
-  if (nullptr != filter_stmt_) {
-    delete filter_stmt_;
-    filter_stmt_ = nullptr;
+  while (!filter_stmts_.empty()) {
+    delete filter_stmts_.back();
+    filter_stmts_.pop_back();
   }
+
+  delete join_stmt_;
+  join_stmt_ = nullptr;
+  delete having_stmt_;
+  having_stmt_ = nullptr;
 }
 
 static RC wildcard_fields(
@@ -98,7 +103,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   // collect tables in `from` statement
   std::vector<Table *> tables;
   std::unordered_map<std::string, Table *> table_map;
-  for (size_t i = 0; i < select_sql.relation_num; i++) {
+  // 保证表的顺序与解析时一样
+  for (int i = select_sql.relation_num-1; i >= 0; i--) {
     const char *table_name = select_sql.relations[i];
     if (nullptr == table_name) {
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
@@ -136,7 +142,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
       group_by_keys.push_back(Field(table, field_meta, NOT_AGGR, nullptr));
     }
   }
-
+  
   // collect query fields in `select` statement
   std::vector<Field> query_fields;
   size_t attr_offset = 0;
@@ -345,16 +351,38 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     }
   }
 
-  Table *default_table = nullptr;
-  if (tables.size() == 1) {
-    default_table = tables[0];
-  }
-
   // create filter statement in `where` statement
+  std::vector<FilterStmt *> filter_stmts;
   FilterStmt *filter_stmt = nullptr;
-  rc = FilterStmt::create(db, default_table, &table_map, select_sql.conditions, select_sql.condition_num, filter_stmt);
+  if (tables.size() == 1) {
+    Table *default_table = nullptr;
+    default_table = tables[0];
+    RC rc = FilterStmt::create(db, default_table, &table_map,
+          select_sql.conditions, select_sql.condition_num, filter_stmt);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("cannot construct filter stmt");
+      return rc;
+    }
+    filter_stmts.push_back(filter_stmt);
+  }else{//分开每个table对应的filter，两边都是常数的filter存放在所有table中
+    for(size_t i=0; i<select_sql.relation_num; i++){
+      RC rc = FilterStmt::create_by_table(db, tables[i], &table_map,
+            select_sql.conditions, select_sql.condition_num, filter_stmt);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("cannot construct filter stmt");
+        return rc;
+      }
+      filter_stmts.push_back(filter_stmt);
+    }
+  }
+  filter_stmt = nullptr;
+
+  // 创建join相关conds列表
+  FilterStmt *join_stmt = nullptr;
+  rc = FilterStmt::create(db, nullptr, &table_map,
+        select_sql.join_conds, select_sql.join_cond_num, join_stmt);
   if (rc != RC::SUCCESS) {
-    LOG_WARN("cannot construct filter stmt");
+    LOG_WARN("cannot construct join filter stmt");
     return rc;
   }
 
@@ -374,7 +402,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   select_stmt->tables_.swap(tables);
   select_stmt->query_fields_.swap(query_fields);
   select_stmt->order_fields_.swap(order_fields);
-  select_stmt->filter_stmt_ = filter_stmt;
+  select_stmt->filter_stmts_.swap(filter_stmts);
+  select_stmt->join_stmt_ = join_stmt;
   select_stmt->do_aggr_ = select_sql.is_aggr;  // 告知执行器生成aggregate_operator
   select_stmt->having_stmt_ = having_stmt;
   select_stmt->group_keys_.swap(group_by_keys);

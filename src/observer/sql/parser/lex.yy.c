@@ -350,8 +350,9 @@ static void yynoreturn yy_fatal_error ( const char* msg , yyscan_t yyscanner );
 	yyg->yy_hold_char = *yy_cp; \
 	*yy_cp = '\0'; \
 	yyg->yy_c_buf_p = yy_cp;
-#define YY_NUM_RULES 63
-#define YY_END_OF_BUFFER 64
+
+#define YY_NUM_RULES 55
+#define YY_END_OF_BUFFER 56
 /* This struct is not used in this scanner,
    but its presence is necessary. */
 struct yy_trans_info
@@ -359,7 +360,11 @@ struct yy_trans_info
 	flex_int32_t yy_verify;
 	flex_int32_t yy_nxt;
 	};
+<<<<<<< HEAD
 static const flex_int16_t yy_accept[167] =
+=======
+static yyconst flex_int16_t yy_accept[167] =
+>>>>>>> e5992bc (implement join metadata from parse to do_select)
     {   0,
         0,    0,    0,    0,   56,   54,    1,    2,   54,   44,
        45,    7,   46,   54,    6,    3,    5,   50,   47,   52,
@@ -391,6 +396,7 @@ static const YY_CHAR yy_ec[256] =
        12,   12,   12,   12,   12,   12,   12,    1,   13,   14,
        15,   16,    1,    1,   17,   18,   19,   20,   21,   22,
        23,   24,   25,   26,   27,   28,   29,   30,   31,   32,
+<<<<<<< HEAD
        26,   33,   34,   35,   36,   37,   38,   39,   40,   26,
         1,    1,    1,    1,   26,    1,   17,   18,   19,   20,
 
@@ -414,15 +420,47 @@ static const YY_CHAR yy_ec[256] =
     } ;
 
 static yyconst YY_CHAR yy_meta[42] =
+=======
+       33,   34,   35,   36,   37,   38,   39,   40,   41,   42,
+        1,    1,    1,    1,   42,    1,   17,   18,   19,   20,
+
+       21,   22,   23,   24,   25,   26,   27,   28,   29,   30,
+       31,   32,   33,   34,   35,   36,   37,   38,   39,   40,
+       41,   42,    1,    1,    1,    1,    1,   43,   43,   43,
+       43,   43,   43,   43,   43,   43,   43,   43,   43,   43,
+       43,   43,   43,   43,   43,   43,   43,   43,   43,   43,
+       43,   43,   43,   43,   43,   43,   43,   43,   43,   43,
+       43,   43,   43,   43,   43,   43,   43,   43,   43,   43,
+       43,   43,   43,   43,   43,   43,   43,   43,   43,   43,
+       43,   43,   43,   43,   43,   43,   43,   43,   43,   43,
+       43,   43,   43,   43,   43,   43,   43,   43,   43,   43,
+
+       43,   43,   43,   43,   43,   43,   43,   43,   43,   43,
+       43,   43,   43,   43,   43,   43,   43,   43,   43,   43,
+       43,   43,   43,   43,   43,   43,   43,   43,   43,   43,
+       43,   43,   43,   43,   43,   43,   43,   43,   43,   43,
+       43,   43,   43,   43,   43,   43,   43,   43,   43,   43,
+       43,   43,   43,   43,   43
+    } ;
+
+static yyconst YY_CHAR yy_meta[43] =
+>>>>>>> e5992bc (implement join metadata from parse to do_select)
     {   0,
         1,    1,    1,    1,    1,    1,    1,    1,    1,    1,
         1,    2,    1,    1,    1,    1,    2,    2,    2,    2,
         2,    2,    2,    2,    2,    2,    2,    2,    2,    2,
         2,    2,    2,    2,    2,    2,    2,    2,    2,    2,
+<<<<<<< HEAD
         3
     } ;
 
 static const flex_int16_t yy_base[171] =
+=======
+        2,    2,    3
+    } ;
+
+static yyconst flex_uint16_t yy_base[171] =
+>>>>>>> e5992bc (implement join metadata from parse to do_select)
     {   0,
         0,    0,    0,    0,  315,  316,  316,  316,   39,  316,
       316,  316,  316,  302,  316,   34,  316,   32,  316,  298,
@@ -444,7 +482,11 @@ static const flex_int16_t yy_base[171] =
       257,  254,  252,  250,  251,  316,  282,  285,  258,   82
     } ;
 
+<<<<<<< HEAD
 static const flex_int16_t yy_def[171] =
+=======
+static yyconst flex_int16_t yy_def[171] =
+>>>>>>> e5992bc (implement join metadata from parse to do_select)
     {   0,
       166,    1,  167,  167,  166,  166,  166,  166,  168,  166,
       166,  166,  166,  166,  166,  166,  166,  166,  166,  166,
@@ -466,7 +508,11 @@ static const flex_int16_t yy_def[171] =
       169,  169,  169,  169,  169,    0,  166,  166,  166,  166
     } ;
 
+<<<<<<< HEAD
 static const flex_int16_t yy_nxt[359] =
+=======
+static yyconst flex_uint16_t yy_nxt[359] =
+>>>>>>> e5992bc (implement join metadata from parse to do_select)
     {   0,
         6,    7,    8,    9,    9,   10,   11,   12,   13,   14,
        15,   16,   17,   18,   19,   20,   21,   22,   23,   24,
@@ -509,7 +555,11 @@ static const flex_int16_t yy_nxt[359] =
       166,  166,  166,  166,  166,  166,  166,  166
     } ;
 
+<<<<<<< HEAD
 static const flex_int16_t yy_chk[359] =
+=======
+static yyconst flex_int16_t yy_chk[359] =
+>>>>>>> e5992bc (implement join metadata from parse to do_select)
     {   0,
         1,    1,    1,    1,    1,    1,    1,    1,    1,    1,
         1,    1,    1,    1,    1,    1,    1,    1,    1,    1,
@@ -580,7 +630,11 @@ extern double atof();
 #line 581 "lex.yy.c"
 /* Prevent the need for linking with -lfl */
 
+<<<<<<< HEAD
 #line 584 "lex.yy.c"
+=======
+#line 579 "lex.yy.c"
+>>>>>>> e5992bc (implement join metadata from parse to do_select)
 
 #define INITIAL 0
 #define STR 1
@@ -858,7 +912,11 @@ YY_DECL
 #line 33 "lex_sql.l"
 
 
+<<<<<<< HEAD
 #line 862 "lex.yy.c"
+=======
+#line 858 "lex.yy.c"
+>>>>>>> e5992bc (implement join metadata from parse to do_select)
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -886,7 +944,11 @@ yy_match:
 				{
 				yy_current_state = (int) yy_def[yy_current_state];
 				if ( yy_current_state >= 167 )
+<<<<<<< HEAD
 					yy_c = yy_meta[yy_c];
+=======
+					yy_c = yy_meta[(unsigned int) yy_c];
+>>>>>>> e5992bc (implement join metadata from parse to do_select)
 				}
 			yy_current_state = yy_nxt[yy_base[yy_current_state] + yy_c];
 			++yy_cp;
@@ -1128,11 +1190,6 @@ yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 	YY_BREAK
 case 43:
 YY_RULE_SETUP
-#line 79 "lex_sql.l"
-RETURN_TOKEN(MIN_AGGR);
-	YY_BREAK
-case 44:
-YY_RULE_SETUP
 #line 80 "lex_sql.l"
 yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 	YY_BREAK
@@ -1197,7 +1254,11 @@ YY_RULE_SETUP
 #line 94 "lex_sql.l"
 ECHO;
 	YY_BREAK
+<<<<<<< HEAD
 #line 1196 "lex.yy.c"
+=======
+#line 1192 "lex.yy.c"
+>>>>>>> e5992bc (implement join metadata from parse to do_select)
 case YY_STATE_EOF(INITIAL):
 case YY_STATE_EOF(STR):
 	yyterminate();
@@ -1498,7 +1559,11 @@ static int yy_get_next_buffer (yyscan_t yyscanner)
 			{
 			yy_current_state = (int) yy_def[yy_current_state];
 			if ( yy_current_state >= 167 )
+<<<<<<< HEAD
 				yy_c = yy_meta[yy_c];
+=======
+				yy_c = yy_meta[(unsigned int) yy_c];
+>>>>>>> e5992bc (implement join metadata from parse to do_select)
 			}
 		yy_current_state = yy_nxt[yy_base[yy_current_state] + yy_c];
 		}
@@ -1527,9 +1592,15 @@ static int yy_get_next_buffer (yyscan_t yyscanner)
 		{
 		yy_current_state = (int) yy_def[yy_current_state];
 		if ( yy_current_state >= 167 )
+<<<<<<< HEAD
 			yy_c = yy_meta[yy_c];
 		}
 	yy_current_state = yy_nxt[yy_base[yy_current_state] + yy_c];
+=======
+			yy_c = yy_meta[(unsigned int) yy_c];
+		}
+	yy_current_state = yy_nxt[yy_base[yy_current_state] + (flex_int16_t) yy_c];
+>>>>>>> e5992bc (implement join metadata from parse to do_select)
 	yy_is_jam = (yy_current_state == 166);
 
 	(void)yyg;
@@ -2380,6 +2451,10 @@ void yyfree (void * ptr , yyscan_t yyscanner)
 #define YYTABLES_NAME "yytables"
 
 #line 94 "lex_sql.l"
+<<<<<<< HEAD
+=======
+
+>>>>>>> e5992bc (implement join metadata from parse to do_select)
 
 
 void scan_string(const char *str, yyscan_t scanner) {
