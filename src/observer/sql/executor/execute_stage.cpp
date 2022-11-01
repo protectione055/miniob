@@ -30,6 +30,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/table_scan_operator.h"
 #include "sql/operator/index_scan_operator.h"
 #include "sql/operator/predicate_operator.h"
+#include "sql/operator/order_operator.h"
 #include "sql/operator/update_operator.h"
 #include "sql/operator/delete_operator.h"
 #include "sql/operator/project_operator.h"
@@ -442,9 +443,50 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   SelectStmt *select_stmt = (SelectStmt *)(sql_event->stmt());
   SessionEvent *session_event = sql_event->session_event();
   RC rc = RC::SUCCESS;
-  if (select_stmt->tables().size() != 1) {
-    LOG_WARN("select more than 1 tables is not supported");
-    rc = RC::UNIMPLENMENT;
+
+
+  std::unordered_map<std::string, Operator*> table_operator_map;
+  if (select_stmt->tables().empty()) {
+    LOG_WARN("invalid argument. size of tables = 0");
+    return RC::INVALID_ARGUMENT;
+  }
+  for(int i=0; i<select_stmt->tables().size(); i++){
+    FilterStmt *filter_stmt = select_stmt->filter_stmts(i);
+    Table *table = select_stmt->tables()[i];
+    Operator *scan_oper = try_to_create_index_scan_operator(filter_stmt);
+    if (nullptr == scan_oper) {
+      scan_oper = new TableScanOperator(table);
+    }  
+    PredicateOperator *pred_oper = new PredicateOperator(filter_stmt);
+    pred_oper->add_child(scan_oper);
+    table_operator_map[table->table_meta().name()] = pred_oper;
+  }
+
+  Operator *join_oper = JoinOperator::create_join_tree(table_operator_map, select_stmt->join_stmt());
+  DEFER([&] () {delete join_oper;});
+
+  HashAggregateOperator aggregate_oper(
+      select_stmt->query_fields(), select_stmt->group_keys(), select_stmt->having_stmt());
+  OrderOperator order_oper = OrderOperator(select_stmt->order_fields());
+  if (select_stmt->do_aggregate()) {
+    aggregate_oper.add_child(join_oper);
+    order_oper.add_child(&aggregate_oper);
+  } else {
+    order_oper.add_child(join_oper);
+  }
+
+  ProjectOperator project_oper;
+  project_oper.add_child(&order_oper);
+
+  // 初始化project_operator
+  bool multi_table = false;
+  if (select_stmt->tables().size() > 1) multi_table = true;
+  for (const Field &field : select_stmt->query_fields()) {
+    project_oper.add_projection(field.table(), field.meta(), multi_table);
+  }
+  rc = project_oper.open();
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("failed to open executer");
     session_event->set_response("FAILURE\n");
     return rc;
   }
@@ -463,12 +505,6 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   ProjectOperator *project_oper = (ProjectOperator *)root;
   
   rc = project_oper->open();
-  
-  if (rc != RC::SUCCESS) {
-    LOG_ERROR("failed to open executer");
-    session_event->set_response("FAILURE\n");
-    return rc;
-  }
 
   // 开始执行
   std::stringstream ss;

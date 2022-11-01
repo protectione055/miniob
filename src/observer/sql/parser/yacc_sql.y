@@ -201,7 +201,11 @@ ParserContext *get_context(yyscan_t scanner)
 		NOT_TOKEN
         HAVING
 		GROUP
-		BY
+		ORDER
+		BY		
+		INNER
+		JOIN
+		ASC
 		IN_TOKEN
 		NULLABLE
 %union {
@@ -234,6 +238,7 @@ ParserContext *get_context(yyscan_t scanner)
 %type <value1> value;
 %type <number> number;
 %type <number> aggregate;
+%type <number> order_type;
 %type <query> sub_query
 
 %%
@@ -437,6 +442,12 @@ type:
        | FLOAT_T { $$=FLOATS; }
 	   | DATE_T { $$=DATES; }
        ;
+order_type:
+
+    /* empty */ { $$=1; }
+	   | ASC  { $$=1; }
+       | DESC { $$=0; }
+       ;
 ID_get:
 	ID 
 	{
@@ -519,7 +530,7 @@ update_attr:
 update_attr_list:
 	/* empty */ | COMMA update_attr update_attr_list {}
 select:				/*  select 语句的语法解析树*/
-    SELECT select_attr FROM ID rel_list where group_by having SEMICOLON
+    SELECT select_attr FROM ID rel_list where order group_by having SEMICOLON
 		{
 			// CONTEXT->ssql->sstr.selection.relations[CONTEXT->from_length++]=$4;
 			selects_append_relation(&CONTEXT->ssql->sstr.selection, $4);
@@ -667,6 +678,71 @@ rel_list:
     | COMMA ID rel_list {	
 				selects_append_relation(&CONTEXT->ssql->sstr.selection, $2);
 		  }
+    | INNER JOIN ID ON join_cond join_cond_list join_list {	
+				selects_append_relation(&CONTEXT->ssql->sstr.selection, $3);
+		  }
+    ;
+join_list:
+    /* empty */
+    | INNER JOIN ID ON join_cond join_cond_list join_list {	
+				selects_append_relation(&CONTEXT->ssql->sstr.selection, $3);
+		  }
+    ;
+join_cond_list:
+    /* empty */
+    | AND join_cond join_cond_list {
+				// CONTEXT->conditions[CONTEXT->condition_length++]=*$2;
+		  }
+    ;
+join_cond:
+    value comOp value 
+		{
+			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 2];
+			Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 0, NULL, right_value);
+			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		}
+    |ID DOT ID comOp value
+		{
+			RelAttr left_attr;
+			relation_attr_init(&left_attr, $1, $3);
+			Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, right_value);
+			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+    	}
+    |value comOp ID DOT ID
+		{
+			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 1];
+
+			RelAttr right_attr;
+			relation_attr_init(&right_attr, $3, $5);
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 1, &right_attr, NULL);
+			CONTEXT->conditions[CONTEXT->condition_length++] = condition;		
+    	}
+    |ID DOT ID comOp ID DOT ID
+		{
+			RelAttr left_attr;
+			relation_attr_init(&left_attr, $1, $3);
+			RelAttr right_attr;
+			relation_attr_init(&right_attr, $5, $7);
+
+			// 判断是否同一表中的两个属性。若否，条件加入join中
+			if (strcmp($1, $5) != 0){
+				Condition condition;
+				condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+				selects_append_joincond(&CONTEXT->ssql->sstr.selection, condition);
+			} else {
+				Condition condition;
+				condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+				CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+			}
+    	}
     ;
 where:
     /* empty */ 
@@ -813,17 +889,16 @@ condition:
 			RelAttr right_attr;
 			relation_attr_init(&right_attr, $5, $7);
 
-			Condition condition;
-			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
-			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
-			// $$=( Condition *)malloc(sizeof( Condition));
-			// $$->left_is_attr = 1;		//属性
-			// $$->left_attr.relation_name=$1;
-			// $$->left_attr.attribute_name=$3;
-			// $$->comp =CONTEXT->comp;
-			// $$->right_is_attr = 1;		//属性
-			// $$->right_attr.relation_name=$5;
-			// $$->right_attr.attribute_name=$7;
+			// 判断是否同一表中的两个属性。若否，条件加入join中
+			if (strcmp($1, $5) != 0){
+				Condition condition;
+				condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+				selects_append_joincond(&CONTEXT->ssql->sstr.selection, condition);
+			} else {
+				Condition condition;
+				condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+				CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+			}
     	}
 	| ID comOp sub_query
 	{
@@ -995,6 +1070,37 @@ having_condition:
 			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
     	}
     ;
+order:
+    /* empty */ 
+    | ORDER BY order_attr {	
+		
+			}
+    ;
+order_attr:
+	ID order_type order_list{
+			OrderAttr attr;
+			order_attr_init(&attr, NULL, $1, $2);
+			selects_append_orders(&CONTEXT->ssql->sstr.selection, &attr);
+		}
+  	| ID DOT ID order_type order_list {
+			OrderAttr attr;
+			order_attr_init(&attr, $1, $3, $4);
+			selects_append_orders(&CONTEXT->ssql->sstr.selection, &attr);
+		}
+    ;
+order_list:
+    /* empty */
+    | COMMA ID order_type order_list{
+			OrderAttr attr;
+			order_attr_init(&attr, NULL, $2, $3);
+			selects_append_orders(&CONTEXT->ssql->sstr.selection, &attr);
+      }
+    | COMMA ID DOT ID order_type order_list{
+			OrderAttr attr;
+			order_attr_init(&attr, $2, $4, $5);
+			selects_append_orders(&CONTEXT->ssql->sstr.selection, &attr);
+  	  }
+  	;
 
 comOp:
   	  EQ { CONTEXT->comp = EQUAL_TO; }

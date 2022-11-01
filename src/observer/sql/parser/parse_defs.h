@@ -41,6 +41,12 @@ typedef struct {
   AggrType aggr_type;    // aggregate type				聚合类型
 } RelAttr;
 
+typedef struct {
+  char *relation_name;   // relation name (may be NULL) 表名
+  char *attribute_name;  // attribute name              属性名
+  int   is_asc;          // is ascending order          是否升序
+} OrderAttr;             
+
 typedef enum { ATTR, VALUE, SUB_QUERY } CondExprType;
 
 typedef enum {
@@ -98,8 +104,12 @@ typedef struct {
   RelAttr attributes[MAX_NUM];    // attrs in Select clause
   size_t relation_num;            // Length of relations in From clause
   char *relations[MAX_NUM];       // relations in From clause
+  size_t join_cond_num;           // Length of join conditions in Fro clause
+  Condition join_conds[MAX_NUM];  // join conditions in Fro clause
   size_t condition_num;           // Length of conditions in Where clause
   Condition conditions[MAX_NUM];  // conditions in Where clause
+  size_t order_num;               // Length of attrs in Order By clause
+  OrderAttr orders[MAX_NUM];      // attrs in Order By clause
   size_t group_by_key_num;        // Length of relations in group by clause
   RelAttr group_by_keys[MAX_NUM];            // attr in group by clause
   Condition having_conditions[MAX_NUM];  // having clause for aggregation
@@ -227,6 +237,9 @@ extern "C" {
 void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const char *attribute_name);
 void relation_attr_destroy(RelAttr *relation_attr);
 
+void order_attr_init(OrderAttr *order_attr, const char *relation_name, const char *attribute_name, const int is_asc);
+void order_attr_destroy(OrderAttr *order_attr);
+
 void value_init_integer(Value *value, int v);
 void value_init_float(Value *value, float v);
 void value_init_string(Value *value, const char *v);
@@ -244,7 +257,9 @@ void attr_info_destroy(AttrInfo *attr_info);
 void selects_init(Selects *selects, ...);
 void selects_append_attribute(Selects *selects, RelAttr *rel_attr);
 void selects_append_relation(Selects *selects, const char *relation_name);
+void selects_append_joincond(Selects *selects, Condition condition);
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num);
+void selects_append_orders(Selects *selects, OrderAttr *order_attr);
 void selects_destroy(Selects *selects);
 
 void inserts_init(Inserts *inserts, const char *relation_name);

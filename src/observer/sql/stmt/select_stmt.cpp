@@ -59,10 +59,15 @@ RC check_field_in_group(bool is_aggr, const FieldMeta *field_meta, std::vector<F
 
 SelectStmt::~SelectStmt()
 {
-  if (nullptr != filter_stmt_) {
-    delete filter_stmt_;
-    filter_stmt_ = nullptr;
+  while (!filter_stmts_.empty()) {
+    delete filter_stmts_.back();
+    filter_stmts_.pop_back();
   }
+
+  delete join_stmt_;
+  join_stmt_ = nullptr;
+  delete having_stmt_;
+  having_stmt_ = nullptr;
 }
 
 static RC wildcard_fields(
@@ -98,7 +103,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   // collect tables in `from` statement
   std::vector<Table *> tables;
   std::unordered_map<std::string, Table *> table_map;
-  for (size_t i = 0; i < select_sql.relation_num; i++) {
+  // 保证表的顺序与解析时一样
+  for (int i = select_sql.relation_num-1; i >= 0; i--) {
     const char *table_name = select_sql.relations[i];
     if (nullptr == table_name) {
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
@@ -136,7 +142,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
       group_by_keys.push_back(Field(table, field_meta, NOT_AGGR, nullptr));
     }
   }
-
+  
   // collect query fields in `select` statement
   std::vector<Field> query_fields;
   size_t attr_offset = 0;
@@ -312,18 +318,79 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
 
   LOG_INFO("got %d tables in from stmt and %d fields in query stmt", tables.size(), query_fields.size());
 
-//   Table *default_table = nullptr;
-//   if (tables.size() == 1) {
-//     default_table = tables[0];
-//   }
+  
+  // collect order fields in `Order By` statement
+  std::vector<std::tuple<FieldExpr, int>> order_fields;
+  for (int i = select_sql.order_num - 1; i >= 0; i--) {
+    const OrderAttr &order_attr = select_sql.orders[i];
+
+    if (!common::is_blank(order_attr.relation_name)) {
+      const char *table_name = order_attr.relation_name;
+      const char *field_name = order_attr.attribute_name;
+
+      auto iter = table_map.find(table_name);
+      if (iter == table_map.end()) {
+        LOG_WARN("no such table in from list: %s", table_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+
+      Table *table = iter->second;
+      const FieldMeta *field_meta = table->table_meta().field(field_name);
+      if (nullptr == field_meta) {
+        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+      order_fields.push_back(std::make_tuple(FieldExpr(table, field_meta), order_attr.is_asc));
+  
+    } else {
+      if (tables.size() != 1) {
+        LOG_WARN("invalid. I do not know the attr's table. attr=%s", order_attr.attribute_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+
+      Table *table = tables[0];
+      const FieldMeta *field_meta = table->table_meta().field(order_attr.attribute_name);
+      if (nullptr == field_meta) {
+        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), order_attr.attribute_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+
+      order_fields.push_back(std::make_tuple(FieldExpr(table, field_meta), order_attr.is_asc));
+    }
+  }
 
   // create filter statement in `where` statement
+  std::vector<FilterStmt *> filter_stmts;
   FilterStmt *filter_stmt = nullptr;
-  
-  rc = FilterStmt::create(db, nullptr, &table_map, select_sql.conditions, select_sql.condition_num, filter_stmt);
-  
+  if (tables.size() == 1) {
+    Table *default_table = nullptr;
+    default_table = tables[0];
+    RC rc = FilterStmt::create(db, default_table, &table_map,
+          select_sql.conditions, select_sql.condition_num, filter_stmt);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("cannot construct filter stmt");
+      return rc;
+    }
+    filter_stmts.push_back(filter_stmt);
+  }else{//分开每个table对应的filter，两边都是常数的filter存放在所有table中
+    for(size_t i=0; i<select_sql.relation_num; i++){
+      RC rc = FilterStmt::create_by_table(db, tables[i], &table_map,
+            select_sql.conditions, select_sql.condition_num, filter_stmt);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("cannot construct filter stmt");
+        return rc;
+      }
+      filter_stmts.push_back(filter_stmt);
+    }
+  }
+  filter_stmt = nullptr;
+
+  // 创建join相关conds列表
+  FilterStmt *join_stmt = nullptr;
+  rc = FilterStmt::create(db, nullptr, &table_map,
+        select_sql.join_conds, select_sql.join_cond_num, join_stmt);
   if (rc != RC::SUCCESS) {
-    LOG_WARN("cannot construct filter stmt");
+    LOG_WARN("cannot construct join filter stmt");
     return rc;
   }
 
@@ -342,7 +409,9 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   SelectStmt *select_stmt = new SelectStmt();
   select_stmt->tables_.swap(tables);
   select_stmt->query_fields_.swap(query_fields);
-  select_stmt->filter_stmt_ = filter_stmt;
+  select_stmt->order_fields_.swap(order_fields);
+  select_stmt->filter_stmts_.swap(filter_stmts);
+  select_stmt->join_stmt_ = join_stmt;
   select_stmt->do_aggr_ = select_sql.is_aggr;  // 告知执行器生成aggregate_operator
   select_stmt->having_stmt_ = having_stmt;
   select_stmt->group_keys_.swap(group_by_keys);

@@ -306,6 +306,59 @@ public:
     }
   }
 
+  //tuple 2合1，只保留tuple a的trx字段
+  TempTuple(const Tuple &a, const Tuple &b){
+    
+    size_t data_len = 0.;
+    for (int i = 0; i < a.cell_num(); i++) {
+      TupleCell cell;
+      const TupleCellSpec *cell_spec;
+      a.cell_at(i, cell);
+      a.cell_spec_at(i, cell_spec);
+      FieldExpr *field_expr = (FieldExpr *)cell_spec->expression();
+      Field field = field_expr->field();
+      FieldExpr *new_field_expr = new FieldExpr(field.table(), field.meta());
+      TupleCellSpec *new_spec = new TupleCellSpec(new_field_expr);
+      data_len += cell.length();
+      this->speces_.push_back(new_spec);
+    }
+    
+    for (int i = 1; i < b.cell_num(); i++) {
+      TupleCell cell;
+      const TupleCellSpec *cell_spec;
+      b.cell_at(i, cell);
+      b.cell_spec_at(i, cell_spec);
+      FieldExpr *field_expr = (FieldExpr *)cell_spec->expression();
+      Field field = field_expr->field();
+      const FieldMeta *meta = field.meta();
+      FieldMeta *new_meta = new FieldMeta();
+      new_meta->init(meta->name(), meta->type(), data_len, meta->len(), meta->visible());
+      FieldExpr *new_field_expr = new FieldExpr(field.table(), new_meta);
+      TupleCellSpec *new_spec = new TupleCellSpec(new_field_expr);
+      data_len += cell.length();
+      this->speces_.push_back(new_spec);
+    }
+
+    char *data = nullptr;
+    if (data_len > 0) {
+      data = new char[data_len];
+      int offset = 0;
+      for (int i = 0; i < a.cell_num(); i++) {
+        TupleCell cell;
+        a.cell_at(i, cell);
+        memcpy(data + offset, cell.data(), cell.length());
+        offset += cell.length();
+      }
+      for (int i = 1; i < b.cell_num(); i++) {
+        TupleCell cell;
+        b.cell_at(i, cell);
+        memcpy(data + offset, cell.data(), cell.length());
+        offset += cell.length();
+      }
+    }
+    record_.set_data(data);
+  }
+
   TempTuple &operator=(const TempTuple &other)
   {
     if (&other != this) {
@@ -394,11 +447,23 @@ public:
   RC find_cell(const Field &field, TupleCell &cell) const override
   {
     const char *field_name = field.field_name();
-    for (size_t i = 0; i < speces_.size(); ++i) {
-      const FieldExpr *field_expr = (const FieldExpr *)speces_[i]->expression();
-      const Field &field = field_expr->field();
-      if (0 == strcmp(field_name, field.field_name())) {
-        return cell_at(i, cell);
+    if (field.table() == nullptr) {
+      for (size_t i = 0; i < speces_.size(); ++i) {
+        const FieldExpr *field_expr = (const FieldExpr *)speces_[i]->expression();
+        const Field &field = field_expr->field();
+        if (0 == strcmp(field_name, field.field_name())) {
+          return cell_at(i, cell);
+        }
+      }
+    } else {
+      const char *table_name = field.table_name();
+      for (size_t i = 0; i < speces_.size(); ++i) {
+        const FieldExpr *field_expr = (const FieldExpr *)speces_[i]->expression();
+        const Field &field = field_expr->field();
+        if (0 == strcmp(field_name, field.field_name())) {
+          if (field.table() == nullptr) return cell_at(i, cell);
+          else if (0 == strcmp(table_name, field.table_name())) return cell_at(i, cell);
+        }
       }
     }
     return RC::NOTFOUND;

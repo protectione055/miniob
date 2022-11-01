@@ -14,25 +14,66 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include "common/lang/string.h"
 #include "sql/parser/parse.h"
 #include "sql/operator/operator.h"
+#include "sql/stmt/filter_stmt.h"
 #include "rc.h"
+
+enum JoinState{
+  BUILD_TABLE,
+  SCAN_BUCKET,
+  GET_NEW_TUPLE
+};
 
 // TODO fixme
 class JoinOperator : public Operator
 {
 public:
-  JoinOperator(Operator *left, Operator *right)
-  {}
+  JoinOperator(Operator *left, Operator *right, std::vector<const FilterUnit *> join_conds)
+  {
+    left_ = left;
+    right_ = right;
+    join_conds_.swap(join_conds);
+  }
 
-  virtual ~JoinOperator() = default;
+  ~JoinOperator()
+  {
+    for (Tuple *result_tuple : result_table_) {
+      delete result_tuple;
+    }
+    for (std::pair<std::string, std::vector<Tuple *>> str_tuples_pair : hash_table_) {
+      for (Tuple *tuple : str_tuples_pair.second) {
+        delete tuple;
+      }
+    }
+    //递归释放内存
+    delete left_;
+    delete right_;
+  }
 
   RC open() override;
   RC next() override;
   RC close() override;
 
+  Tuple * current_tuple() override;
+  
+  static Operator * create_join_tree(std::unordered_map<std::string, Operator*> table_operator_map, FilterStmt *join_conds);
+  bool do_predicate(Tuple *tuple);
+public:
+  static std::unordered_map<std::string, std::string> fathers;
+
 private:
   Operator *left_ = nullptr;
   Operator *right_ = nullptr;
-  bool round_done_ = true;
+  JoinState join_state_ = BUILD_TABLE;
+  std::vector<const FilterUnit *> join_conds_;
+  std::unordered_map<std::string, std::vector<Tuple *>> hash_table_;
+  std::vector<Tuple *> result_table_;
+  std::vector<Tuple *> cur_bucket_;
+  Tuple *right_tuple_ = nullptr;
+  int pos_ = 0;
+
+  bool do_nestloop_ = true;
+  std::vector<Tuple *> left_tuples_;
 };
