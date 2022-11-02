@@ -143,6 +143,7 @@ bool DefaultConditionFilter::filter(const Record &rec) const
   }
 
   int cmp_result = 0;
+  bool is_null = false;
   switch (attr_type_) {
     case CHARS: {  // 字符串都是定长的，直接比较
       // 按照C字符串风格来定
@@ -166,7 +167,21 @@ bool DefaultConditionFilter::filter(const Record &rec) const
       time_t right = *(time_t *)right_value;
       cmp_result = left - right;
     } break;
+    case NULLS: {
+      is_null = true;
+    } break;
     default: {
+    }
+  }
+
+  if(is_null) {
+    switch (comp_op_) {
+      case IS_NULL:
+        return true;
+      case IS_NOT_NULL:
+        return false;
+      default:
+        return false;
     }
   }
 

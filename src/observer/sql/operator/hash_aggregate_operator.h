@@ -13,7 +13,7 @@ public:
   //需要深拷贝
   Key(const Key &other)
   {
-    key_ = other.key_;
+    key_ = TempTuple(other.key_);
   }
 
   Key &operator=(const Key &other)
@@ -29,12 +29,12 @@ public:
     RC rc = RC::SUCCESS;
 
     // 构造key schema
-    std::vector<FieldMeta *> key_fieldmetas;
+    std::vector<const FieldMeta *> key_fieldmetas;
     size_t offset = 0;
     for (const Field &field : group_by_keys) {
       const FieldMeta *field_meta = field.meta();
       FieldMeta *key_meta = new FieldMeta();
-      key_meta->init(field_meta->name(), field_meta->type(), offset, field_meta->len(), true);
+      key_meta->init(field_meta->name(), field_meta->type(), offset, field_meta->len(), true, field_meta->nullable());
       key_fieldmetas.push_back(key_meta);
       offset += key_meta->len();
     }

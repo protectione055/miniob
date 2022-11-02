@@ -384,21 +384,24 @@ RC Table::make_record(int value_num, const Value *values, char *&record_out)
 
   const int normal_field_start_index = table_meta_.sys_field_num();
   for (int i = 0; i < value_num; i++) {
-    const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
+    const FieldMeta *field_meta = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
-    if (field->type() != value.type) {
+    if (field_meta->type() != value.type && value.type != NULLS) {
       LOG_ERROR("Invalid value type. table name =%s, field name=%s, type=%d, but given=%d",
           table_meta_.name(),
-          field->name(),
-          field->type(),
+          field_meta->name(),
+          field_meta->type(),
           value.type);
       return RC::SCHEMA_FIELD_TYPE_MISMATCH;
     }
   }
 
   // 复制所有字段的值
+  const FieldMeta *nullmap_meta = table_meta_.field("__nullmap");
   int record_size = table_meta_.record_size();
   char *record = new char[record_size];
+  int *nullmap = (int*)&record[nullmap_meta->offset()];
+  *nullmap = 0;
 
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
@@ -410,7 +413,11 @@ RC Table::make_record(int value_num, const Value *values, char *&record_out)
         copy_len = data_len + 1;
       }
     }
-    memcpy(record + field->offset(), value.data, copy_len);
+    if(value.type == NULLS) {
+      *nullmap |= 1<<(normal_field_start_index+i);
+    } else {
+      memcpy(record + field->offset(), value.data, copy_len);
+    }
   }
 
   record_out = record;
@@ -949,78 +956,78 @@ Index *Table::find_index(const char *index_name) const
 
 IndexScanner *Table::find_index_for_scan(const DefaultConditionFilter &filter)
 {
-  const ConDesc *field_cond_desc = nullptr;
-  const ConDesc *value_cond_desc = nullptr;
-  if (filter.left().is_attr && !filter.right().is_attr) {
-    field_cond_desc = &filter.left();
-    value_cond_desc = &filter.right();
-  } else if (filter.right().is_attr && !filter.left().is_attr) {
-    field_cond_desc = &filter.right();
-    value_cond_desc = &filter.left();
-  }
-  if (field_cond_desc == nullptr || value_cond_desc == nullptr) {
-    return nullptr;
-  }
+//   const ConDesc *field_cond_desc = nullptr;
+//   const ConDesc *value_cond_desc = nullptr;
+//   if (filter.left().is_attr && !filter.right().is_attr) {
+//     field_cond_desc = &filter.left();
+//     value_cond_desc = &filter.right();
+//   } else if (filter.right().is_attr && !filter.left().is_attr) {
+//     field_cond_desc = &filter.right();
+//     value_cond_desc = &filter.left();
+//   }
+//   if (field_cond_desc == nullptr || value_cond_desc == nullptr) {
+//     return nullptr;
+//   }
 
-  const FieldMeta *field_meta = table_meta_.find_field_by_offset(field_cond_desc->attr_offset);
-  if (nullptr == field_meta) {
-    LOG_PANIC("Cannot find field by offset %d. table=%s", field_cond_desc->attr_offset, name());
-    return nullptr;
-  }
+//   const FieldMeta *field_meta = table_meta_.find_field_by_offset(field_cond_desc->attr_offset);
+//   if (nullptr == field_meta) {
+//     LOG_PANIC("Cannot find field by offset %d. table=%s", field_cond_desc->attr_offset, name());
+//     return nullptr;
+//   }
 
-  //const IndexMeta *index_meta = table_meta_.find_index_by_field(field_meta->name());
-  //if (nullptr == index_meta) {
-    return nullptr;
-  //}
+//   //const IndexMeta *index_meta = table_meta_.find_index_by_field(field_meta->name());
+//   //if (nullptr == index_meta) {
+//     return nullptr;
+//   //}
 
-  Index *index = nullptr;//find_index(index_meta->name());
-  if (nullptr == index) {
-    return nullptr;
-  }
+//   Index *index = nullptr;//find_index(index_meta->name());
+//   if (nullptr == index) {
+//     return nullptr;
+//   }
 
-  const char *left_key = nullptr;
-  const char *right_key = nullptr;
-  int left_len = 4;
-  int right_len = 4;
-  bool left_inclusive = false;
-  bool right_inclusive = false;
-  switch (filter.comp_op()) {
-  case EQUAL_TO: {
-    left_key = (const char *)value_cond_desc->value;
-    right_key = (const char *)value_cond_desc->value;
-    left_inclusive = true;
-    right_inclusive = true;
-  }
-    break;
-  case LESS_EQUAL: {
-    right_key = (const char *)value_cond_desc->value;
-    right_inclusive = true;
-  }
-    break;
-  case GREAT_EQUAL: {
-    left_key = (const char *)value_cond_desc->value;
-    left_inclusive = true;
-  }
-    break;
-  case LESS_THAN: {
-    right_key = (const char *)value_cond_desc->value;
-    right_inclusive = false;
-  }
-    break;
-  case GREAT_THAN: {
-    left_key = (const char *)value_cond_desc->value;
-    left_inclusive = false;
-  }
-    break;
-  default: {
-    return nullptr;
-  }
-  }
+//   const char *left_key = nullptr;
+//   const char *right_key = nullptr;
+//   int left_len = 4;
+//   int right_len = 4;
+//   bool left_inclusive = false;
+//   bool right_inclusive = false;
+//   switch (filter.comp_op()) {
+//   case EQUAL_TO: {
+//     left_key = (const char *)value_cond_desc->value;
+//     right_key = (const char *)value_cond_desc->value;
+//     left_inclusive = true;
+//     right_inclusive = true;
+//   }
+//     break;
+//   case LESS_EQUAL: {
+//     right_key = (const char *)value_cond_desc->value;
+//     right_inclusive = true;
+//   }
+//     break;
+//   case GREAT_EQUAL: {
+//     left_key = (const char *)value_cond_desc->value;
+//     left_inclusive = true;
+//   }
+//     break;
+//   case LESS_THAN: {
+//     right_key = (const char *)value_cond_desc->value;
+//     right_inclusive = false;
+//   }
+//     break;
+//   case GREAT_THAN: {
+//     left_key = (const char *)value_cond_desc->value;
+//     left_inclusive = false;
+//   }
+//     break;
+//   default: {
+//     return nullptr;
+//   }
+//   }
 
-  if (filter.attr_type() == CHARS) {
-    left_len = left_key != nullptr ? strlen(left_key) : 0;
-    right_len = right_key != nullptr ? strlen(right_key) : 0;
-  }
+//   if (filter.attr_type() == CHARS) {
+//     left_len = left_key != nullptr ? strlen(left_key) : 0;
+//     right_len = right_key != nullptr ? strlen(right_key) : 0;
+//   }
   // todo: implement this
   return nullptr;
   //return index->create_scanner(left_key, left_len, left_inclusive, right_key, right_len, right_inclusive);
