@@ -294,7 +294,7 @@ public:
     if (&other == this) {
       return 0;
     }
-    for (int i = 0; i < speces_.size(); i++) {
+    for (size_t i = 0; i < speces_.size(); i++) {
       TupleCell this_cell, other_cell;
       this->cell_at(i, this_cell);
       other.cell_at(i, other_cell);
@@ -319,7 +319,7 @@ public:
     }
     data_ = (char*)realloc(data_, data_len_);
     memset(data_, 0, data_len_);
-    for(int i=0;i<fields.size();i++) {
+    for(size_t i=0;i<fields.size();i++) {
       set_null(i, true);
     }
   }
@@ -359,6 +359,7 @@ public:
       const FieldMeta *field_meta = field_by_index(index);
       memcpy(&data_[field_meta->offset()], data, field_meta->len());
     }
+    return RC::SUCCESS;
   }
 
   // convenience method, for aggregating.

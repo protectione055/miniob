@@ -113,7 +113,7 @@ RC HashAggregateOperator::open()
             } else if (is_new_group || aggr_type == MIN && cur_cell.compare(child_cell) > 0 ||
                 aggr_type == MAX && cur_cell.compare(child_cell) < 0) {
               // 这里假设字符串是定长
-              if (cur_cell.length() != child_cell.length()) {
+              if (cur_cell.attr_type() != NULLS && cur_cell.length() != child_cell.length()) {
                 LOG_WARN("mismatch cell length: cur_cell=%d, child_cell=%d", cur_cell.length(), child_cell.length());
                 return RC::GENERIC_ERROR;
               }
