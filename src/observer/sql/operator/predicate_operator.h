@@ -38,6 +38,8 @@ public:
   Tuple * current_tuple() override;
   //int tuple_cell_num() const override;
   //RC tuple_cell_spec_at(int index, TupleCellSpec &spec) const override;
+
+  static bool compare_tuple_cell(CompOp comp, TupleCell left_cell, TupleCell right_cell);
 private:
   bool do_predicate(RowTuple &tuple);
 private:

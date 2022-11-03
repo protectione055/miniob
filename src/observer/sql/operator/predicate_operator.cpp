@@ -73,8 +73,15 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
     TupleCell right_cell;
     left_expr->get_value(tuple, left_cell);
     right_expr->get_value(tuple, right_cell);
-    const int compare = left_cell.compare(right_cell);
     
+    if(PredicateOperator::compare_tuple_cell(comp, left_cell, right_cell) == false) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool PredicateOperator::compare_tuple_cell(CompOp comp, TupleCell left_cell, TupleCell right_cell) {
     bool filter_result = false;
     if(comp == LIKE || comp == NOT_LIKE){
       const bool like = left_cell.like(right_cell);
@@ -89,7 +96,15 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
         LOG_WARN("invalid compare type: %d", comp);
       } break;
       }
-    }else{
+    } else if(comp == IS_NULL || comp == IS_NOT_NULL) {
+      if(right_cell.attr_type() != NULLS) {
+        LOG_ERROR("IS or IS NOT isn't followed by NULL!");
+      }
+      return left_cell.attr_type() == NULLS ? comp == IS_NULL : comp == IS_NOT_NULL;
+    } else {
+      if(left_cell.attr_type() == NULLS || right_cell.attr_type() == NULLS) {
+        return false;
+      }
       const int compare = left_cell.compare(right_cell);
       switch (comp) {
       case EQUAL_TO: {
@@ -115,12 +130,8 @@ bool PredicateOperator::do_predicate(RowTuple &tuple)
       } break;
       }
     }
-    
-    if (!filter_result) {
-      return false;
-    }
-  }
-  return true;
+
+    return filter_result;
 }
 
 // int PredicateOperator::tuple_cell_num() const

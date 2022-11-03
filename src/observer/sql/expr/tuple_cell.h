@@ -33,6 +33,11 @@ public:
   void set_type(AttrType type) { this->attr_type_ = type; }
   void set_length(int length) { this->length_ = length; }
   void set_data(char *data) { this->data_ = data; }
+  void set_null() {
+    set_type(NULLS);
+    set_data((char*)0);
+    set_length(0);
+  }
   void set_data(const char *data) { this->set_data(const_cast<char *>(data)); }
 
   void to_string(std::ostream &os) const;
@@ -41,19 +46,16 @@ public:
   
   bool like(const TupleCell &other) const;
 
-  RC add(const TupleCell &other);
-
+  // returns null if type is NULLs
   const char *data() const
   {
     return data_;
   }
 
+  // equals 0 if null
   int length() const { return length_; }
 
-  AttrType attr_type() const
-  {
-    return attr_type_;
-  }
+  AttrType attr_type() const { return attr_type_; }
 
 private:
   AttrType attr_type_ = UNDEFINED;

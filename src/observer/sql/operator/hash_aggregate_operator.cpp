@@ -1,5 +1,6 @@
 #include "common/log/log.h"
 #include "sql/operator/hash_aggregate_operator.h"
+#include "sql/operator/predicate_operator.h"
 #include "storage/record/record.h"
 #include "storage/common/table.h"
 #include "sql/stmt/filter_stmt.h"
@@ -31,13 +32,13 @@ RC HashAggregateOperator::open()
       LOG_ERROR("failed to initiate key");
       return rc;
     }
-    Tuple *cur_group_tuple = nullptr;
+    TempTuple *cur_group_tuple = nullptr;
     if (tuples_.find(cur_group_key) == tuples_.end()) {
       //对新的group进行初始化
       TempTuple *new_result_tuple = new TempTuple();
-      std::vector<FieldMeta *> group_fieldmetas;
+      std::vector<const FieldMeta *> group_fieldmetas;
       for (const Field &field : query_fields_) {
-        group_fieldmetas.push_back(const_cast<FieldMeta *>(field.meta()));
+        group_fieldmetas.push_back(field.meta());
       }
       new_result_tuple->set_schema(group_fieldmetas);
       tuples_[cur_group_key] = new_result_tuple;
@@ -57,11 +58,10 @@ RC HashAggregateOperator::open()
     //执行聚合
     for (int i = 0; i < query_fields_.size(); i++) {
       Field &field = query_fields_[i];
-      FieldMeta *field_meta = field_meta_[i];
+      FieldMeta *field_meta = field_meta_[i]; // for query_fields
       const FieldMeta *subfield_meta = field.sub_fieldmeta();
       TupleCell cur_cell;
       cur_group_tuple->cell_at(i, cur_cell);
-      char *cur_data = const_cast<char *>(cur_cell.data());
       TupleCell child_cell;
       char *child_data;
 
@@ -78,10 +78,9 @@ RC HashAggregateOperator::open()
             rc = RC::GENERIC_ERROR;
             if (0 == strcmp(g_field.table_name(), field.table_name()) &&
                 0 == strcmp(g_field.meta()->name(), field.sub_fieldmeta()->name())) {
-              cur_data = const_cast<char *>(cur_cell.data());
               //假设字符串是定长
-              assert(cur_cell.length() == child_cell.length());
-              memcpy(cur_data, child_data, child_cell.length());
+              assert(field_meta->len() == child_cell.length());
+              cur_group_tuple->cell_set(i, child_data);
               rc = RC::SUCCESS;
               break;
             }
@@ -94,35 +93,38 @@ RC HashAggregateOperator::open()
       } else {
         switch (aggr_type) {
           case COUNT:
+            if(is_new_group) {
+              cur_group_tuple->cell_int_add(i, 0); // init null to 0
+            }
             if (subfield_meta == nullptr) {
               // count(*)
-              *(int *)cur_data += 1;
+              cur_group_tuple->cell_int_add(i, 1);
             } else {
               // count(a)
-              if (!child_tuple->is_null_at(i)) {
-                cur_data = const_cast<char *>(cur_cell.data());
-                *(int *)cur_data += 1;
+              if (child_cell.attr_type() != NULLS) {
+                cur_group_tuple->cell_int_add(i, 1);
               }
             }
             break;
           case MIN:
           case MAX:
-            if (is_new_group || aggr_type == MIN && cur_cell.compare(child_cell) > 0 ||
+            if(child_cell.attr_type() == NULLS) {
+              // do nothing
+            } else if (is_new_group || aggr_type == MIN && cur_cell.compare(child_cell) > 0 ||
                 aggr_type == MAX && cur_cell.compare(child_cell) < 0) {
-              cur_data = const_cast<char *>(cur_cell.data());
               // 这里假设字符串是定长
-              if (cur_cell.length() != child_cell.length()) {
+              if (cur_cell.attr_type() != NULLS && cur_cell.length() != child_cell.length()) {
                 LOG_WARN("mismatch cell length: cur_cell=%d, child_cell=%d", cur_cell.length(), child_cell.length());
                 return RC::GENERIC_ERROR;
               }
-              memcpy(cur_data, child_data, child_cell.length());
+              cur_group_tuple->cell_set(i, child_data);
             }
             break;
           case SUM:
           case AVG:
             // assert(cur_cell.attr_type() != CHARS && child_cell.attr_type() != CHARS);
-            if (!child_tuple->is_null_at(i)) {
-              rc = cur_cell.add(child_cell);
+            if (child_cell.attr_type() != NULLS) {
+              rc = cur_group_tuple->cell_value_add(i, Value{child_cell.attr_type(), (void*)child_cell.data()});
               if (rc != RC::SUCCESS) {
                 LOG_WARN("failed to add when doing %s", field.field_name());
                 return rc;
@@ -222,50 +224,8 @@ bool HashAggregateOperator::having(const Tuple *tuple, const FilterStmt *having_
     TupleCell right_cell;
     left_expr->get_value(*tuple, left_cell);
     right_expr->get_value(*tuple, right_cell);
-    const int compare = left_cell.compare(right_cell);
-
-    bool filter_result = false;
-    if (comp == LIKE || comp == NOT_LIKE) {
-      const bool like = left_cell.like(right_cell);
-      switch (comp) {
-        case LIKE: {
-          filter_result = (like == true);
-        } break;
-        case NOT_LIKE: {
-          filter_result = (like == false);
-        } break;
-        default: {
-          LOG_WARN("invalid compare type: %d", comp);
-        } break;
-      }
-    } else {
-      const int compare = left_cell.compare(right_cell);
-      switch (comp) {
-        case EQUAL_TO: {
-          filter_result = (0 == compare);
-        } break;
-        case LESS_EQUAL: {
-          filter_result = (compare <= 0);
-        } break;
-        case NOT_EQUAL: {
-          filter_result = (compare != 0);
-        } break;
-        case LESS_THAN: {
-          filter_result = (compare < 0);
-        } break;
-        case GREAT_EQUAL: {
-          filter_result = (compare >= 0);
-        } break;
-        case GREAT_THAN: {
-          filter_result = (compare > 0);
-        } break;
-        default: {
-          LOG_WARN("invalid compare type: %d", comp);
-        } break;
-      }
-    }
-
-    if (!filter_result) {
+   
+    if(PredicateOperator::compare_tuple_cell(comp, left_cell, right_cell) == false) {
       return false;
     }
   }
