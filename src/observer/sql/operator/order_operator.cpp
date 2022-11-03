@@ -83,20 +83,32 @@ Tuple * OrderOperator::current_tuple()
 //     return 1;
 // }
 
-bool OrderOperator::order_compare(const Tuple *A, const Tuple *B){
-    for(int i=0; i<order_fields_.size(); ++i){
-        FieldExpr expr = std::get<0>(order_fields_[i]);
-        int is_asc = std::get<1>(order_fields_[i]);
-        TupleCell A_cell;
-        TupleCell B_cell;
-        expr.get_value(*A, A_cell);
-        expr.get_value(*B, B_cell);
-        const int compare = A_cell.compare(B_cell);
-        if((is_asc && compare>0) || (!is_asc && compare<0)){
-            return true;
-        }else if((is_asc && compare<0) || (!is_asc && compare>0)){
-            return false;
-        }
+bool OrderOperator::order_compare(const Tuple *A, const Tuple *B)
+{
+  for (int i = 0; i < order_fields_.size(); ++i) {
+    FieldExpr expr = std::get<0>(order_fields_[i]);
+    int is_asc = std::get<1>(order_fields_[i]);
+    TupleCell A_cell;
+    TupleCell B_cell;
+    expr.get_value(*A, A_cell);
+    expr.get_value(*B, B_cell);
+    if (A_cell.attr_type() == NULLS && B_cell.attr_type() == NULLS) {
+      continue;
     }
-    return false;
+    int compare;
+    // nulls are considered smaller than anything when sorting
+    if(A_cell.attr_type() == NULLS) {
+      compare = -1;
+    } else if(B_cell.attr_type() == NULLS) {
+      compare = 1;
+    } else {
+      compare = A_cell.compare(B_cell);
+    }
+    if ((is_asc && compare > 0) || (!is_asc && compare < 0)) {
+      return true;
+    } else if ((is_asc && compare < 0) || (!is_asc && compare > 0)) {
+      return false;
+    }
+  }
+  return false;
 }

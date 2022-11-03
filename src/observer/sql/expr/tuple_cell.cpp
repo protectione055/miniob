@@ -56,11 +56,14 @@ int TupleCell::compare(const TupleCell &other) const
   Value vleft{this->attr_type_, this->data_};
   Value vright{other.attr_type_, other.data_};
 
-  if(vleft.type == NULLS || vright.type == NULLS) {
+  if(vleft.type == NULLS && vright.type == NULLS) {
     // comparison with NULL should already be handled prior to calling this function
-    LOG_ERROR("trying to compare NULL, logical error!");
     return 0;
-  }
+  } else if(vleft.type == NULLS && vright.type != NULLS) {
+    return -1;
+  } else if(vleft.type != NULLS && vright.type == NULLS) {
+    return 1;
+  } 
 
   if (vleft.type != vright.type) {
     rc = try_typecast_matchtype(&vleft, &vright);

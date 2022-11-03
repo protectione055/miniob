@@ -185,6 +185,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
           LOG_WARN("failed to find table for group-by key %s", group_by_attr.attribute_name);
           return rc;
         }
+      } else {
+        table = db->find_table(group_by_attr.relation_name);
       }
       const FieldMeta *field_meta = table->table_meta().field(group_by_attr.attribute_name);
       if (nullptr == field_meta) {
