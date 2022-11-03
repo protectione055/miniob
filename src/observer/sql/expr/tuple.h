@@ -35,10 +35,8 @@ public:
 
   ~TupleCellSpec()
   {
-    if (expression_) {
-      delete expression_;
-      expression_ = nullptr;
-    }
+    // isn't really safe to delete expression_
+    // memory leak it is :D
   }
 
   void set_alias(const char *alias)
@@ -267,7 +265,11 @@ public:
   virtual ~TempTuple()
   {
     for (TupleCellSpec *spec : speces_) {
-      delete spec;
+      // delete spec;
+
+      // we messed up and lost track of how and where we share
+      // our pointers, so it's not safe to delete here
+      // oh well, memory leak again hhhh
     }
     speces_.clear();
     if (data_ != nullptr) {
@@ -278,6 +280,11 @@ public:
 
   TempTuple(const TempTuple &t) {
     append_tuple(t);
+  }
+
+  TempTuple &operator=(const TempTuple &t) {
+    append_tuple(t);
+    return *this;
   }
 
   TempTuple(const Tuple &t) {

@@ -106,11 +106,8 @@ static RC create_query_field(
     size_t attr_len;
     AttrType attr_type;
     char *aggr_field_name;
-    if (relation_attr.aggr_type != NOT_AGGR) {
-      aggr_field_name = new char[10 + strlen(relation_attr.attribute_name)];
-      sprintf(aggr_field_name, "%s(%s)", aggr_name[relation_attr.aggr_type], relation_attr.attribute_name);
-    } else {
-      aggr_field_name = strdup(relation_attr.attribute_name);
+    aggr_field_name = strdup(relation_attr.attribute_name);
+    if (relation_attr.aggr_type == NOT_AGGR) {
       rc = check_field_in_group(true, field_meta, group_by_keys);
       if (rc != RC::SUCCESS) {
         LOG_WARN("invalid field name. attr=%s", field_meta->name());
@@ -135,6 +132,9 @@ static RC create_query_field(
         break;
     }
     aggr_field_meta->init(aggr_field_name, attr_type, attr_offset, attr_len, true, field_meta->nullable());
+    if (relation_attr.aggr_type != NOT_AGGR) {
+      aggr_field_meta->dirty_hack_set_namefunc(aggr_name[relation_attr.aggr_type]);
+    }
     query_fields.push_back(Field(table, aggr_field_meta, relation_attr.aggr_type, field_meta));
     attr_offset += attr_len;
   } else {
@@ -185,6 +185,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
           LOG_WARN("failed to find table for group-by key %s", group_by_attr.attribute_name);
           return rc;
         }
+      } else {
+        table = db->find_table(group_by_attr.relation_name);
       }
       const FieldMeta *field_meta = table->table_meta().field(group_by_attr.attribute_name);
       if (nullptr == field_meta) {

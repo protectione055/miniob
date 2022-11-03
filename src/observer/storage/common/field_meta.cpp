@@ -74,6 +74,7 @@ RC FieldMeta::init(const char *name, AttrType attr_type, int attr_offset, int at
 
 const char *FieldMeta::name() const
 {
+  if(dirty_hack_name_with_func_.size() > 0) return dirty_hack_name_with_func_.c_str();
   return name_.c_str();
 }
 
@@ -106,6 +107,19 @@ void FieldMeta::desc(std::ostream &os) const
 {
   os << "field name=" << name_ << ", type=" << attr_type_to_string(attr_type_) << ", len=" << attr_len_
      << ", visible=" << (visible_ ? "yes" : "no") << ", nullable=" << (nullable_ ? "yes" : "no");
+}
+
+void FieldMeta::dirty_hack_set_namefunc(const char *namefunc) {
+  dirty_hack_func_ = namefunc;
+  dirty_hack_name_with_func_ = std::string(namefunc) + "(" + name_ + ")";
+}
+
+std::string FieldMeta::dirty_hack_name_with_tablename(const char *table_name) const {
+  if(dirty_hack_func_.size() > 0) {
+    return std::move(dirty_hack_func_ + "(" + table_name + "." + name_ + ")");
+  } else {
+    return std::move(std::string(table_name) + "." + name_);
+  }
 }
 
 void FieldMeta::to_json(Json::Value &json_value) const

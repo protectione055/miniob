@@ -33,7 +33,7 @@ RC HashAggregateOperator::open()
       return rc;
     }
     TempTuple *cur_group_tuple = nullptr;
-    if (tuples_.find(cur_group_key) == tuples_.end()) {
+    if (key_tuples_.find(cur_group_key) == key_tuples_.end()) {
       //对新的group进行初始化
       TempTuple *new_result_tuple = new TempTuple();
       std::vector<const FieldMeta *> group_fieldmetas;
@@ -41,7 +41,7 @@ RC HashAggregateOperator::open()
         group_fieldmetas.push_back(field.meta());
       }
       new_result_tuple->set_schema(group_fieldmetas);
-      tuples_[cur_group_key] = new_result_tuple;
+      key_tuples_[cur_group_key] = new_result_tuple;
       valid_count_[cur_group_key] = std::map<int, int>();
       is_new_group = true;
     }
@@ -50,10 +50,10 @@ RC HashAggregateOperator::open()
     assert(!(test_key < cur_group_key));
 
     // 找到当前group
-    if (tuples_.find(cur_group_key) == tuples_.end()) {
+    if (key_tuples_.find(cur_group_key) == key_tuples_.end()) {
       assert(false);
     }
-    cur_group_tuple = tuples_[cur_group_key];
+    cur_group_tuple = key_tuples_[cur_group_key];
 
     //执行聚合
     for (int i = 0; i < query_fields_.size(); i++) {
@@ -63,11 +63,11 @@ RC HashAggregateOperator::open()
       TupleCell cur_cell;
       cur_group_tuple->cell_at(i, cur_cell);
       TupleCell child_cell;
-      char *child_data;
+      const char *child_data;
 
       if (field.table() != nullptr) {
         child_tuple->find_cell(Field(field.table(), subfield_meta), child_cell);
-        child_data = const_cast<char *>(child_cell.data());
+        child_data = child_cell.data();
       }
 
       AggrType aggr_type = field.aggregation_type();
@@ -150,7 +150,7 @@ RC HashAggregateOperator::open()
   // 计算avg结果
   if (do_avg) {
     for (auto &row : valid_count_) {
-      TempTuple *group_tuple = tuples_[row.first];
+      TempTuple *group_tuple = key_tuples_[row.first];
       std::map<int, int> &idx_cnt_map = row.second;
       for (auto &col : idx_cnt_map) {
         int index = col.first;
@@ -161,8 +161,9 @@ RC HashAggregateOperator::open()
           LOG_WARN("can't find cell at %d", index);
           return rc;
         }
-        char *cur_data = const_cast<char *>(cur_cell.data());
-        *(float *)cur_data /= (float)valid_num;
+        
+        float new_data = (*(float *)cur_cell.data())/(float)valid_num;
+        group_tuple->cell_set(index, (char*)&new_data);
       }
     }
   }
@@ -174,14 +175,14 @@ RC HashAggregateOperator::next()
 {
   if (first_fetch_) {
     first_fetch_ = false;
-    iter_ = tuples_.begin();
+    iter_ = key_tuples_.begin();
   } else {
     iter_++;
   }
-  while (iter_ != tuples_.end() && !having(iter_->second, having_stmt_)) {
+  while (iter_ != key_tuples_.end() && !having(iter_->second, having_stmt_)) {
     iter_++;
   }
-  if (iter_ == tuples_.end()) {
+  if (iter_ == key_tuples_.end()) {
     return RC::RECORD_EOF;
   }
   return RC::SUCCESS;
@@ -191,7 +192,7 @@ RC HashAggregateOperator::close()
 {
   children_[0]->close();
   delete having_stmt_;
-  for (auto &kvpair : tuples_) {
+  for (auto &kvpair : key_tuples_) {
     delete kvpair.second;
   }
   return RC::SUCCESS;
@@ -199,7 +200,7 @@ RC HashAggregateOperator::close()
 
 Tuple *HashAggregateOperator::current_tuple()
 {
-  assert(iter_ != tuples_.end());
+  assert(iter_ != key_tuples_.end());
   Tuple *current_tuple = iter_->second;
   return current_tuple;
 }

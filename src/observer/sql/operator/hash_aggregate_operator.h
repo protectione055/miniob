@@ -12,9 +12,8 @@ public:
 
   //需要深拷贝
   Key(const Key &other)
-  {
-    key_ = TempTuple(other.key_);
-  }
+  : key_(other.key_)
+  {}
 
   Key &operator=(const Key &other)
   {
@@ -48,13 +47,11 @@ public:
         LOG_ERROR("failed to find cell in tuple");
         return rc;
       }
-      TupleCell key_cell;
-      rc = key_.cell_at(i, key_cell);
+      rc = key_.cell_set(i, tuple_cell.data());
       if (rc != RC::SUCCESS) {
-        LOG_ERROR("failed to find cell in key");
+        LOG_ERROR("failed to set cell in key");
         return rc;
       }
-      memcpy(const_cast<char *>(key_cell.data()), tuple_cell.data(), key_cell.length());
     }
     return rc;
   }
@@ -102,7 +99,7 @@ private:
   std::vector<FieldMeta *> field_meta_;  //聚合结果的fieldmeta
   const FilterStmt *having_stmt_ = nullptr;
   std::vector<Field> group_by_keys_;
-  std::map<Key, TempTuple *> tuples_;
+  std::map<Key, TempTuple *> key_tuples_;
   std::map<Key, std::map<int, int>> valid_count_;  //记录每个group上的各个avg结果的除数，只计算非空值的数量
   bool first_fetch_ = true;                        //标记是否取第一个元组
   std::map<Key, TempTuple *>::iterator iter_;

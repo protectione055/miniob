@@ -40,6 +40,12 @@ public:
   bool visible() const;
   bool nullable() const;
 
+  // 用来显示例如 AVG(table.relation) 这种格式的一个 dirty hack
+  // 没有这个的话，会显示成 table.AVG(relation)
+  // no time to do it properly.
+  void dirty_hack_set_namefunc(const char *namefunc);
+  std::string dirty_hack_name_with_tablename(const char *table_name) const;
+
 public:
   void desc(std::ostream &os) const;
 
@@ -49,6 +55,8 @@ public:
 
 protected:
   std::string name_;
+  std::string dirty_hack_func_;
+  std::string dirty_hack_name_with_func_;
   AttrType attr_type_;
   int attr_offset_;
   int attr_len_;
