@@ -407,7 +407,15 @@ RC Table::make_record(int value_num, const Value *values, char *&record_out)
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
     size_t copy_len = field->len();
-    if(value.type == NULLS) {
+    if (value.type == NULLS) {
+      if (!field->nullable()) {
+        LOG_ERROR("Field is not nullable. table name =%s, field name=%s, type=%d, but given=%d",
+            table_meta_.name(),
+            field->name(),
+            field->type(),
+            value.type);
+        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      }
       *nullmap |= 1<<(normal_field_start_index+i);
     } else {
       if (field->type() == CHARS) {

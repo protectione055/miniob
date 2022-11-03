@@ -347,6 +347,7 @@ public:
   }
 
   // pass nullptr as data to set null, otherwise clears null
+  // todo: check nullability
   RC cell_set(int index, const char *data) {
     if (index < 0 || index >= static_cast<int>(speces_.size())) {
       LOG_WARN("cell_set: invalid argument. index=%d", index);
