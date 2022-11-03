@@ -254,7 +254,10 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
             LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
             return RC::SCHEMA_FIELD_MISSING;
           }
-          create_query_field(table, select_sql, field_meta, relation_attr, group_by_keys, attr_offset, query_fields);
+          rc = create_query_field(table, select_sql, field_meta, relation_attr, group_by_keys, attr_offset, query_fields);
+          if(rc != RC::SUCCESS) {
+            return rc;
+          }
         }
       }
     } else {
@@ -270,7 +273,10 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
         LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name);
         return RC::SCHEMA_FIELD_MISSING;
       }
-      create_query_field(table, select_sql, field_meta, relation_attr, group_by_keys, attr_offset, query_fields);
+      rc = create_query_field(table, select_sql, field_meta, relation_attr, group_by_keys, attr_offset, query_fields);
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
     }
   }
 
