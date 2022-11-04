@@ -72,9 +72,12 @@ public:
     return field_.field_name();
   }
 
+  void set_associated_value(TupleCell &cell);
+
   RC get_value(const Tuple &tuple, TupleCell &cell) const override;
 private:
   Field field_;
+  TupleCell associated_query_cell_;		//保存与外查询关联的值
 };
 
 class ValueExpr : public Expression

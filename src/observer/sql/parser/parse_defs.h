@@ -45,9 +45,9 @@ typedef struct {
   char *relation_name;   // relation name (may be NULL) 表名
   char *attribute_name;  // attribute name              属性名
   int   is_asc;          // is ascending order          是否升序
-} OrderAttr;             
+} OrderAttr;
 
-typedef enum { ATTR, VALUE, SUB_QUERY } CondExprType;
+typedef enum { ATTR, VALUE, SUB_QUERY, VALUE_LIST } CondExprType;
 
 typedef enum {
   EQUAL_TO,     //"="     0
@@ -58,6 +58,8 @@ typedef enum {
   GREAT_THAN,   //">"     5
   LIKE,         //"like"  6
   NOT_LIKE,     //"not like"  7
+  IN,           //"in"    8
+  NOT_IN,       //"not in"    9
   IS_NULL,
   IS_NOT_NULL,
   NO_OP
@@ -96,6 +98,8 @@ typedef struct _Condition {
   Value right_value;   // right-hand side value if right_is_attr = FALSE && right_is_query == FALSE
                        //   int right_is_query;  // 1时，操作符右边是子查询
   void *right_query;
+  size_t value_num;       // Length of values
+  Value values[MAX_NUM];  // List of values to check in IN/NOT_IN statements
 } Condition;
 
 // struct of select
@@ -264,6 +268,7 @@ void selects_append_relation(Selects *selects, const char *relation_name);
 void selects_append_joincond(Selects *selects, Condition condition);
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num);
 void selects_append_orders(Selects *selects, OrderAttr *order_attr);
+void subquery_create_value_list(Value dst[], Value src[], size_t value_num);
 void selects_destroy(Selects *selects);
 
 void inserts_init(Inserts *inserts, const char *relation_name);
@@ -312,6 +317,9 @@ void selects_append_groupkey(Selects *selects, RelAttr *rel_attr);
 void condition_init_with_subquery(Condition *condition, CompOp comp, CondExprType left_expr_type, RelAttr *left_attr,
     Value *left_value, Selects *left_query, CondExprType right_expr_type, RelAttr *right_attr, Value *right_value,
     Selects *right_query);
+
+void condition_init_with_value_list(Condition *condition, CompOp comp, CondExprType left_expr_type, RelAttr *left_attr,
+    Value *left_value, Value *value_list, size_t value_num);
 
 #ifdef __cplusplus
 }

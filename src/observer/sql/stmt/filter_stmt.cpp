@@ -40,11 +40,8 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
   FilterStmt *tmp_stmt = new FilterStmt();
   for (int i = 0; i < condition_num; i++) {
     FilterUnit *filter_unit = nullptr;
-    
+
     rc = create_filter_unit(db, default_table, tables, conditions[i], filter_unit);
-    if (filter_unit->is_associated_query()) {
-      tmp_stmt->is_associated_query_ = true;
-    }
 
     if (rc != RC::SUCCESS) {
       delete tmp_stmt;
@@ -109,43 +106,19 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   switch (condition.comp) {
     case IN:
     case NOT_IN:
-      /* code */
-      // IN/NOT_IN运算符中，左子式只能有一行结果，右子式必须子查询
+      // IN/NOT_IN运算符中，左子式只能有一行结果，右子式必须是子查询
       if (condition.left_expr_type == SUB_QUERY && !((Selects *)condition.left_query)->is_aggr ||
-          condition.right_expr_type != SUB_QUERY) {
+          condition.right_expr_type != SUB_QUERY && condition.right_expr_type != VALUE_LIST) {
         return RC::INVALID_ARGUMENT;
       }
       break;
     default:
-      // 非集合运算符左右子式只能有一行结果
+      // 非集合运算符左右子式都只能有一行结果
       if (condition.left_expr_type == SUB_QUERY && !((Selects *)condition.left_query)->is_aggr ||
           condition.right_expr_type == SUB_QUERY && !((Selects *)condition.right_query)->is_aggr) {
         return RC::INVALID_ARGUMENT;
       }
       break;
-  }
-
-  // collect tables in `where` statement if this query is a `sub-query`
-  // 子查询中出现与父查询关联的表时，需要走完全不同的执行逻辑
-  bool associated_query = false;
-  if (condition.left_is_attr) {
-    if (common::is_blank(condition.left_attr.relation_name)) {
-      LOG_WARN("Cannot find the table corresponding to the attribute");
-      return RC::MISMATCH;
-    }
-    if (tables->find(condition.left_attr.relation_name) == tables->end()) {
-      associated_query = true;
-    }
-  }
-
-  if (condition.right_is_attr) {
-    if (common::is_blank(condition.right_attr.relation_name)) {
-      LOG_WARN("Cannot find the table corresponding to the attribute");
-      return RC::MISMATCH;
-    }
-    if (tables->find(condition.right_attr.relation_name) == tables->end()) {
-      associated_query = true;
-    }
   }
 
   Expression *left = nullptr;
@@ -174,7 +147,11 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       LOG_WARN("invalid argument in subquery");
       return RC::INVALID_ARGUMENT;
     }
-    left = new SubQueryExpr(stmt, associated_query);
+    left = new SubQueryExpr();
+    rc = ((SubQueryExpr *)left)->init_with_subquery_stmt(stmt);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to init_with_subquery_stmt");
+    }
   }
 
   if (condition.right_expr_type == ATTR) {
@@ -201,14 +178,24 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       LOG_WARN("invalid argument in subquery");
       return RC::INVALID_ARGUMENT;
     }
-    right = new SubQueryExpr(stmt, associated_query);
+    right = new SubQueryExpr();
+    rc = ((SubQueryExpr *)right)->init_with_subquery_stmt(stmt);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to init_with_subquery_stmt");
+    }
+  } else if (condition.right_expr_type == VALUE_LIST) {
+    assert(condition.left_expr_type == ATTR);
+    right = new SubQueryExpr();
+    rc = ((SubQueryExpr *)right)->init_with_value_list((FieldExpr *)left, condition.values, condition.value_num);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to init_with_value_list");
+    }
   }
 
   filter_unit = new FilterUnit;
   filter_unit->set_comp(comp);
   filter_unit->set_left(left);
   filter_unit->set_right(right);
-  filter_unit->set_associated(associated_query);
 
   return rc;
 }

@@ -20,6 +20,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/parser/parse_defs.h"
 #include "sql/stmt/stmt.h"
 #include "sql/expr/expression.h"
+#include "common/lang/bitmap.h"
 
 class Db;
 class Table;
@@ -57,10 +58,12 @@ public:
   {
     right_ = expr;
   }
-  void set_associated(bool is_associated)
+
+  bool have_subquery() const
   {
-    is_associated_query_ = is_associated;
+    return left_->type() == ExprType::SUB_QUERY || right_->type() == ExprType::SUB_QUERY;
   }
+
   Expression *left() const
   {
     return left_;
@@ -102,16 +105,10 @@ public:
     return RC::SUCCESS;
   }
 
-  bool is_associated_query() const
-  {
-    return is_associated_query_;
-  }
-
 private:
   CompOp comp_ = NO_OP;
   Expression *left_ = nullptr;
   Expression *right_ = nullptr;
-  bool is_associated_query_ = false;
 };
 
 class FilterStmt 
@@ -141,12 +138,6 @@ public:
   static RC create_table_filter_unit(Db *db, Table *table, std::unordered_map<std::string, Table *> *tables,
 			       const Condition &condition, FilterUnit *&filter_unit);
 
-  bool is_associated_query() const
-  {
-    return is_associated_query_;
-  }
-
 private:
-  std::vector<FilterUnit *>  filter_units_; // 默认当前都是AND关系
-  bool is_associated_query_ = false;
+  std::vector<FilterUnit *> filter_units_;  // 默认当前都是AND关系
 };

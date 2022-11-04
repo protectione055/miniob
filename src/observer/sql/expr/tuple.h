@@ -516,10 +516,8 @@ public:
   ~Key() = default;
 
   //需要深拷贝
-  Key(const Key &other)
-  {
-    this->key_ = other.key_;
-  }
+  Key(const Key &other) : key_(other.key_)
+  {}
 
   Key &operator=(const Key &other)
   {
@@ -539,7 +537,7 @@ public:
     for (const Field &field : group_by_keys) {
       const FieldMeta *field_meta = field.meta();
       FieldMeta *key_meta = new FieldMeta();
-      key_meta->init(field_meta->name(), field_meta->type(), offset, field_meta->len(), true);
+      key_meta->init(field_meta->name(), field_meta->type(), offset, field_meta->len(), true, field_meta->nullable());
       key_fieldmetas.push_back(key_meta);
       offset += key_meta->len();
     }
@@ -553,13 +551,11 @@ public:
         LOG_ERROR("failed to find cell in tuple");
         return rc;
       }
-      TupleCell key_cell;
-      rc = key_.cell_at(i, key_cell);
+      rc = key_.cell_set(i, tuple_cell.data());
       if (rc != RC::SUCCESS) {
-        LOG_ERROR("failed to find cell in key");
+        LOG_ERROR("failed to set cell in key");
         return rc;
       }
-      memcpy(const_cast<char *>(key_cell.data()), tuple_cell.data(), key_cell.length());
     }
     return rc;
   }

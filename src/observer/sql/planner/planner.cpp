@@ -36,31 +36,35 @@ RC Planner::create_select_plan(SelectStmt *select_stmt, Operator *&root)
     LOG_WARN("invalid argument. size of tables = 0");
     return RC::INVALID_ARGUMENT;
   }
-  for (int i = 0; i < select_stmt->tables().size(); i++) {
-    FilterStmt *filter_stmt = select_stmt->push_down_filter_stmts(i);
-    Table *table = select_stmt->tables()[i];
-    Operator *scan_oper = try_to_create_index_scan_operator(filter_stmt);
-    if (nullptr == scan_oper) {
-      scan_oper = new TableScanOperator(table);
-    }
-    PredicateOperator *pred_oper = new PredicateOperator(filter_stmt);
-    pred_oper->add_child(scan_oper);
-    table_operator_map[table->table_meta().name()] = pred_oper;
-  }
 
-  Operator *join_oper = JoinOperator::create_join_tree(table_operator_map, select_stmt->join_keys());
+  PredicateOperator *top_pred_oper = new PredicateOperator(select_stmt->filter_stmt());
+  if (select_stmt->tables().size() > 1) {
+    for (int i = 0; i < select_stmt->tables().size(); i++) {
+      FilterStmt *push_down_filter_stmt = select_stmt->push_down_filter_stmts(i);
+      Table *table = select_stmt->tables()[i];
+      Operator *scan_oper = try_to_get_scan_operator(table, push_down_filter_stmt);
+      PredicateOperator *push_down_pred_oper = new PredicateOperator(push_down_filter_stmt);
+      push_down_pred_oper->add_child(scan_oper);
+      table_operator_map[table->table_meta().name()] = push_down_pred_oper;
+    }
+    Operator *join_oper = JoinOperator::create_join_tree(table_operator_map, select_stmt->join_keys());
+    top_pred_oper->add_child(join_oper);
+  } else {
+    Operator *scan_oper = try_to_get_scan_operator(select_stmt->tables()[0], select_stmt->filter_stmt());
+    top_pred_oper->add_child(scan_oper);
+  }
 
   OrderOperator *order_oper = new OrderOperator(select_stmt->order_fields());
 
   ProjectOperator *project_oper = new ProjectOperator();
+
   if (select_stmt->do_aggregate()) {
     HashAggregateOperator *aggregate_oper =
         new HashAggregateOperator(select_stmt->query_fields(), select_stmt->group_keys(), select_stmt->having_stmt());
-    aggregate_oper->add_child(join_oper);
+    aggregate_oper->add_child(top_pred_oper);
     order_oper->add_child(aggregate_oper);
-
   } else {
-    order_oper->add_child(join_oper);
+    order_oper->add_child(top_pred_oper);
   }
 
   project_oper->add_child(order_oper);
@@ -75,4 +79,13 @@ RC Planner::create_select_plan(SelectStmt *select_stmt, Operator *&root)
 
   root = project_oper;
   return rc;
+}
+
+Operator *Planner::try_to_get_scan_operator(Table *table, FilterStmt *filter_stmt)
+{
+  Operator *scan_oper = try_to_create_index_scan_operator(filter_stmt);
+  if (nullptr == scan_oper) {
+    scan_oper = new TableScanOperator(table);
+  }
+  return scan_oper;
 }

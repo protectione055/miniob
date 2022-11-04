@@ -38,6 +38,8 @@ typedef struct ParserContext {
   char id[MAX_NUM];
   QueryContext query_stack[MAX_NUM];
   size_t query_stack_depth;
+  Value value_list[MAX_NUM];
+  size_t value_list_length;
 } ParserContext;
 
 
@@ -48,23 +50,7 @@ void query_stack_push(ParserContext *context)
   size_t depth = context->query_stack_depth;
   // 保存当前ParserContext状态
   memcpy(&stack[depth], context, sizeof(QueryContext));
-//   stack[depth].query = context->ssql;
-//   stack[depth].select_length = context->select_length;
-//   stack[depth].condition_length = context->condition_length;
-//   stack[depth].having_condition_length = context->having_condition_length;
-//   stack[depth].from_length = context->from_length;
-//   stack[depth].value_length = context->value_length;
-//   stack[depth].comp = context->comp;
 
-//   for(int i = 0; i < context->value_length; i++) {
-//     stack[depth].values[i] = context->values[i];
-//   }
-//   for(int i = 0; i < context->condition_length; i++) {
-//     stack[depth].conditions[i] = context->conditions[i];
-//   }
-//     for(int i = 0; i < context->having_condition_length; i++) {
-//     stack[depth].having_conditions[i] = context->having_conditions[i];
-//   }
   
   // 初始化ParserContext
   context->ssql = query_create();
@@ -83,25 +69,6 @@ void query_stack_pop(ParserContext *context)
   QueryContext *stack = context->query_stack;
   size_t depth = context->query_stack_depth - 1;
   memcpy(context, &stack[depth], sizeof(QueryContext));
-  // 恢复ParserContext状态
-//   context->ssql = stack[depth].ssql;
-//   query_destroy(context->ssql);
-//   context->select_length = stack[depth].select_length;
-//   context->condition_length = stack[depth].condition_length;
-//   context->having_condition_length = stack[depth].having_condition_length;
-//   context->from_length = stack[depth].from_length;
-//   context->value_length = stack[depth].value_length;
-//   context->comp = stack[depth].comp;
-  
-//   for(int i = 0; i < context->value_length; i++) {
-//     context->values[i] = stack[depth].values[i];
-//   }
-//   for(int i = 0; i < context->condition_length; i++) {
-//     context->conditions[i] = stack[depth].conditions[i];
-//   }
-//     for(int i = 0; i < context->having_condition_length; i++) {
-//     context->having_conditions[i] = stack[depth].having_conditions[i];
-//   }
   
   // 删除栈顶子查询
   stack[depth].ssql = NULL;
@@ -245,6 +212,7 @@ ParserContext *get_context(yyscan_t scanner)
 %type <number> aggregate;
 %type <number> order_type;
 %type <number> nullable;
+%type <query> sub_query
 
 %%
 
@@ -939,6 +907,24 @@ condition:
 		free(right_subquery);
 		printf("s op s condition_length=%d\n", CONTEXT->condition_length);
 	}
+	| ID comOp subquery_value_list{
+		RelAttr left_attr;
+		relation_attr_init(&left_attr, NULL, $1);
+
+		Condition condition;
+		condition_init_with_value_list(&condition, CONTEXT->comp, ATTR, &left_attr, NULL, CONTEXT->value_list, CONTEXT->value_list_length);
+		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		CONTEXT->value_list_length = 0;
+	}
+	| ID DOT ID comOp subquery_value_list{
+		RelAttr left_attr;
+		relation_attr_init(&left_attr, $1, $3);
+
+		Condition condition;
+		condition_init_with_value_list(&condition, CONTEXT->comp, ATTR, &left_attr, NULL, CONTEXT->value_list, CONTEXT->value_list_length);
+		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		CONTEXT->value_list_length = 0;
+	}
     ;
 sub_query:
     sub_query_init select_attr FROM ID rel_list where group_by having RBRACE {
@@ -952,6 +938,13 @@ sub_query:
 		$$ = CONTEXT->ssql;
         
 		query_stack_pop(CONTEXT);
+	}
+	;
+subquery_value_list:
+	LBRACE value value_list RBRACE {
+		subquery_create_value_list(CONTEXT->value_list, CONTEXT->values, CONTEXT->value_length);
+		CONTEXT->value_list_length = CONTEXT->value_length;
+		CONTEXT->value_length = 0;
 	}
 	;
 sub_query_init:
@@ -1105,6 +1098,8 @@ comOp:
 	// hack for IS NULL and IS NOT NULL, dirty, but works
     | IS { CONTEXT->comp = IS_NULL; }
     | IS NOT_TOKEN { CONTEXT->comp = IS_NOT_NULL; }
+	| IN_TOKEN {CONTEXT->comp = IN;}
+	| NOT_TOKEN IN_TOKEN {CONTEXT->comp = NOT_IN;}
     ;
 
 load_data:

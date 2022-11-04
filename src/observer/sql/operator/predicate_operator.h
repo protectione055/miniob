@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/operator/operator.h"
 #include "sql/expr/subquery_expression.h"
+#include "sql/stmt/filter_stmt.h"
 
 class FilterStmt;
 
@@ -43,7 +44,7 @@ public:
   static bool compare_tuple_cell(CompOp comp, TupleCell left_cell, TupleCell right_cell);
 private:
   bool do_predicate(Tuple &tuple);
-  RC execute_subquery(SubQueryExpr *sub_query);
+  bool evaluate_subquery(const FilterUnit *filter_unit, Tuple &tuple);
 
 private:
   FilterStmt *filter_stmt_ = nullptr;

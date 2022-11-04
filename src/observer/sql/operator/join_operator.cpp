@@ -97,7 +97,7 @@ RC JoinOperator::next()
               LOG_WARN("failed to get tuple from operator");
               return RC::INTERNAL;
             }
-            TempTuple *new_tuple = new TempTuple(tuple);
+            TempTuple *new_tuple = new TempTuple(*tuple);
             left_tuples_.push_back(new_tuple);
           }
           join_state_ = GET_NEW_TUPLE;
@@ -129,7 +129,7 @@ RC JoinOperator::next()
             LOG_WARN("failed to get tuple from operator");
             return RC::INTERNAL;
           }
-          right_tuple_ = new TempTuple(tuple);
+          right_tuple_ = new TempTuple(*tuple);
           pos_ = 0;
           join_state_ = SCAN_BUCKET;
           break;

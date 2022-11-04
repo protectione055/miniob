@@ -132,7 +132,7 @@ void condition_init_with_subquery(Condition *condition, CompOp comp, CondExprTyp
   condition->right_is_attr = 0;
   condition->left_expr_type = left_expr_type;
   condition->right_expr_type = right_expr_type;
-  // 确定Select结构体可以直接赋值？
+
   switch (left_expr_type) {
     case ATTR:
       condition->left_is_attr = 1;
@@ -159,6 +159,31 @@ void condition_init_with_subquery(Condition *condition, CompOp comp, CondExprTyp
       condition->right_query = (Selects *)malloc(sizeof(Selects));
       memcpy(condition->right_query, right_query, sizeof(Selects));
       break;
+  }
+}
+
+void condition_init_with_value_list(Condition *condition, CompOp comp, CondExprType left_expr_type, RelAttr *left_attr,
+    Value *left_value, Value *value_list, size_t value_num)
+{
+  condition->comp = comp;
+  condition->left_is_attr = 0;
+  condition->right_is_attr = 0;
+
+  condition->left_expr_type = left_expr_type;
+  switch (left_expr_type) {
+    case ATTR:
+      condition->left_is_attr = 1;
+      condition->left_attr = *left_attr;
+      break;
+    case VALUE:
+      condition->left_value = *left_value;
+      break;
+  }
+
+  condition->right_expr_type = VALUE_LIST;
+  condition->value_num = value_num;
+  for (size_t i = 0; i < value_num; i++) {
+    condition->values[i] = value_list[i];
   }
 }
 
@@ -237,6 +262,12 @@ void selects_append_having_conditions(Selects *selects, Condition conditions[], 
 void selects_append_orders(Selects *selects, OrderAttr *order_attr)
 {
   selects->orders[selects->order_num++] = *order_attr;
+}
+void subquery_create_value_list(Value dst[], Value src[], size_t value_num)
+{
+  for (size_t i = 0; i < value_num; i++) {
+    dst[i] = src[i];
+  }
 }
 void selects_destroy(Selects *selects)
 {

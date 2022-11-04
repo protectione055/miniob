@@ -1,3 +1,5 @@
+#pragma once
+
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/select_stmt.h"
 #include "sql/operator/table_scan_operator.h"
@@ -51,6 +53,7 @@ public:
 
 private:
   RC create_select_plan(SelectStmt *select_stmt, Operator *&root);
+  Operator *try_to_get_scan_operator(Table *table, FilterStmt *filter_stmt);
   Stmt *stmt_ = nullptr;
   Operator *root_ = nullptr;
 };

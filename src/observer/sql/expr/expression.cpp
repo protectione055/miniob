@@ -14,10 +14,25 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/expr/tuple.h"
 
+void FieldExpr::set_associated_value(TupleCell &cell)
+{
+  if (cell.attr_type() == NULL) {
+    associated_query_cell_.set_null();
+    return;
+  }
+  associated_query_cell_.set_type(cell.attr_type());
+  associated_query_cell_.set_data((char *)cell.data());
+  associated_query_cell_.set_length(cell.length());
+}
 
 RC FieldExpr::get_value(const Tuple &tuple, TupleCell &cell) const
 {
-  return tuple.find_cell(field_, cell);
+  RC rc = rc = tuple.find_cell(field_, cell);
+  if (rc == RC::NOTFOUND && associated_query_cell_.attr_type() != UNDEFINED) {
+    cell = associated_query_cell_;
+    return RC::SUCCESS;
+  }
+  return rc;
 }
 
 RC ValueExpr::get_value(const Tuple &tuple, TupleCell & cell) const

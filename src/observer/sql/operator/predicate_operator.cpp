@@ -19,35 +19,6 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "storage/common/field.h"
 
-RC PredicateOperator::execute_subquery(SubQueryExpr *sub_query)
-{
-  // 创建子查询计划
-  RC rc = RC::SUCCESS;
-  SelectStmt *select_stmt = sub_query->select_stmt();
-  Planner planner(select_stmt);
-  Operator *root = nullptr;
-  planner.create_executor(root);
-
-  rc = root->open();
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to open subquery");
-    return rc;
-  }
-  //获取子查询所有结果，保存到FilterUnit下对应的SubQueryExpr(左子式或右子式)中
-  while ((rc = root->next()) == RC::SUCCESS) {
-    Tuple *current_tuple = root->current_tuple();
-    sub_query->append_tuple(current_tuple);
-  }
-
-  root->close();
-
-  if (rc != RC::RECORD_EOF) {
-    LOG_ERROR("unknown error when executing subquery");
-    return rc;
-  }
-  return RC::SUCCESS;
-}
-
 RC PredicateOperator::open()
 {
   RC rc = RC::SUCCESS;
@@ -62,41 +33,6 @@ RC PredicateOperator::open()
     return rc;
   }
 
-  // 扫描所有FilterUnit，有子查询直接执行
-  for (FilterUnit *filter_unit : filter_stmt_->filter_units()) {
-    Expression *left = filter_unit->left();
-    Expression *right = filter_unit->right();
-    // 处理左子查询
-    if (left->type() == ExprType::SUB_QUERY) {
-      SubQueryExpr *left_query = dynamic_cast<SubQueryExpr *>(left);
-      if (filter_unit->comp() != IN && filter_unit->comp() != NOT_IN && !left_query->select_stmt()->do_aggregate()) {
-        LOG_WARN("more than one row returned by a subquery used as an expression");
-        return INVALID_ARGUMENT;
-      }
-      if (!left_query->is_associated_query()) {
-        // 非关联子查询预先求出结果
-        rc = execute_subquery(left_query);
-        if (rc != RC::SUCCESS) {
-          LOG_WARN("failed to execute left subquery");
-        }
-      }
-    }
-    // 处理右子查询
-    if (right->type() == ExprType::SUB_QUERY) {
-      SubQueryExpr *right_query = dynamic_cast<SubQueryExpr *>(right);
-      if (filter_unit->comp() != IN && filter_unit->comp() != NOT_IN && !right_query->select_stmt()->do_aggregate()) {
-        LOG_WARN("more than one row returned by a subquery used as an expression");
-        return INVALID_ARGUMENT;
-      }
-      if (!right_query->is_associated_query()) {
-        // 非关联子查询预先求出结果
-        rc = execute_subquery(right_query);
-        if (rc != RC::SUCCESS) {
-          LOG_WARN("failed to execute left subquery");
-        }
-      }
-    }
-  }
   return rc;
 }
 
@@ -138,16 +74,19 @@ bool PredicateOperator::do_predicate(Tuple &tuple)
   }
 
   for (const FilterUnit *filter_unit : filter_stmt_->filter_units()) {
-    Expression *left_expr = filter_unit->left();
-    Expression *right_expr = filter_unit->right();
-    CompOp comp = filter_unit->comp();
-    TupleCell left_cell;
-    TupleCell right_cell;
-    // 子查询结果集为空时，有可能取到类型为Undefined的cell
-    left_expr->get_value(tuple, left_cell);
-    right_expr->get_value(tuple, right_cell);
-    
-    if(PredicateOperator::compare_tuple_cell(comp, left_cell, right_cell) == false) {
+
+    if (!filter_unit->have_subquery()) {
+      Expression *left_expr = filter_unit->left();
+      Expression *right_expr = filter_unit->right();
+      CompOp comp = filter_unit->comp();
+      TupleCell left_cell;
+      TupleCell right_cell;
+      left_expr->get_value(tuple, left_cell);
+      right_expr->get_value(tuple, right_cell);
+      if (PredicateOperator::compare_tuple_cell(comp, left_cell, right_cell) == false) {
+        return false;
+      }
+    } else if (evaluate_subquery(filter_unit, tuple) == false) {
       return false;
     }
   }
@@ -205,6 +144,48 @@ bool PredicateOperator::compare_tuple_cell(CompOp comp, TupleCell left_cell, Tup
     }
 
     return filter_result;
+}
+
+bool PredicateOperator::evaluate_subquery(const FilterUnit *filter_unit, Tuple &tuple)
+{
+  Expression *left_expr = filter_unit->left();
+  Expression *right_expr = filter_unit->right();
+  CompOp comp = filter_unit->comp();
+  TupleCell left_cell;
+  TupleCell right_cell;
+  SubQueryExpr *left_subquery_expr = nullptr;
+  SubQueryExpr *right_subquery_expr = nullptr;
+
+  if (left_expr->type() == ExprType::SUB_QUERY) {
+    left_subquery_expr = (SubQueryExpr *)left_expr;
+    if (left_subquery_expr->status() == ASSOCIATED) {
+      left_subquery_expr->init_and_execute_associated_query(tuple);
+    }
+  }
+  if (right_expr->type() == ExprType::SUB_QUERY) {
+    right_subquery_expr = (SubQueryExpr *)right_expr;
+    if (right_subquery_expr->status() == ASSOCIATED) {
+      right_subquery_expr->init_and_execute_associated_query(tuple);
+    }
+  }
+  left_expr->get_value(tuple, left_cell);
+  right_expr->get_value(tuple, right_cell);
+
+  switch (comp) {
+    case IN:
+      return right_subquery_expr->in(left_cell);
+      break;
+    case NOT_IN:
+      return !right_subquery_expr->in(left_cell);
+      break;
+    default:
+      if (left_cell.attr_type() == UNDEFINED || right_cell.attr_type() == UNDEFINED) {
+        return false;
+      }
+      return compare_tuple_cell(comp, left_cell, right_cell);
+      break;
+  }
+  return false;
 }
 
 // int PredicateOperator::tuple_cell_num() const
