@@ -38,7 +38,8 @@ typedef enum {
 typedef struct {
   char *relation_name;   // relation name (may be NULL) 表名
   char *attribute_name;  // attribute name              属性名
-  AggrType aggr_type;    // aggregate type				聚合类型
+  AggrType aggr_type;    // aggregate type				      聚合类型
+  int   is_complex;      // is_complex				          判断是否为表达式
 } RelAttr;
 
 typedef struct {
@@ -66,6 +67,15 @@ typedef enum {
   NOT_EXISTS,
   NO_OP
 } CompOp;
+
+//Expression 运算符
+typedef enum {
+  PLUS,     //"+"     0
+  MINUS,   //"="    1
+  MULTIPLY,    //"*"    2
+  DIVIDE,    //"/"     3
+  NO_MATHOP
+} MathOp;
 
 //属性值类型
 typedef enum {

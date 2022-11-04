@@ -35,8 +35,50 @@ RC FieldExpr::get_value(const Tuple &tuple, TupleCell &cell) const
   return rc;
 }
 
-RC ValueExpr::get_value(const Tuple &tuple, TupleCell & cell) const
+RC ValueExpr::get_value(const Tuple &tuple, TupleCell &cell) const
 {
   cell = tuple_cell_;
+  return RC::SUCCESS;
+}
+
+RC ComplexExpr::get_value(const Tuple &tuple, TupleCell &cell) const
+{
+  TupleCell left_cell;
+  TupleCell right_cell;
+  left_->get_value(tuple, left_cell);
+  right_->get_value(tuple, right_cell);
+  Value *left_value, *right_value;
+  try_typecast(left_value, Value{left_cell.attr_type(), (void*)left_cell.data()}, FLOATS);
+  try_typecast(right_value, Value{left_cell.attr_type(), (void*)left_cell.data()}, FLOATS);
+
+  float left, right, res;
+  left  = *(float*)left_value->data;
+  right = *(float*)right_value->data;
+  switch (op_)
+  {
+  case MathOp::PLUS:
+    res = left + right;
+    break;
+  
+  case MathOp::MINUS:
+    res = left - right;
+    break;
+  
+  case MathOp::MULTIPLY:
+    res = left * right;
+    break;
+    
+  case MathOp::DIVIDE:
+    res = left / right;
+    break;
+  default:
+    break;
+  }
+
+  char *res_value = (char *)malloc(sizeof(float));
+
+  (*(float*)res_value) = res;
+  cell.set_data(res_value);
+  cell.set_type(FLOATS);
   return RC::SUCCESS;
 }

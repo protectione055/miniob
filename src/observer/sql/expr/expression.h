@@ -17,6 +17,8 @@ See the Mulan PSL v2 for more details. */
 #include <string.h>
 #include "storage/common/field.h"
 #include "sql/expr/tuple_cell.h"
+#include "sql/parser/parse_defs.h"
+#include "sql/stmt/typecast.h"
 #include "sql/stmt/stmt.h"
 
 class Tuple;
@@ -25,6 +27,7 @@ enum class ExprType {
   NONE,
   FIELD,
   VALUE,
+  COMPLEX, 
   SUB_QUERY,
 };
 
@@ -109,4 +112,30 @@ public:
 
 private:
   TupleCell tuple_cell_;
+};
+
+class ComplexExpr : public Expression
+{
+public:
+  ComplexExpr() = default;
+  ComplexExpr(Expression *left, Expression *right, MathOp op)
+  :left_(left), right_(right), op_(op)
+  {}
+
+  virtual ~ComplexExpr()
+  {
+
+  }
+
+  ExprType type() const override
+  {
+    return ExprType::COMPLEX;
+  }
+
+  RC get_value(const Tuple &tuple, TupleCell &cell) const override;
+
+private:
+  Expression *left_;
+  Expression *right_;
+  MathOp op_;
 };

@@ -30,6 +30,7 @@ void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const
     relation_attr->relation_name = nullptr;
   }
   relation_attr->aggr_type = NOT_AGGR;
+  relation_attr->is_complex = 0;
   relation_attr->attribute_name = strdup(attribute_name);
 }
 void relation_attr_destroy(RelAttr *relation_attr)
