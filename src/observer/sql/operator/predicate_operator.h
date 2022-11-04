@@ -45,6 +45,7 @@ public:
 private:
   bool do_predicate(Tuple &tuple);
   bool evaluate_subquery(const FilterUnit *filter_unit, Tuple &tuple);
+  RC init_subquery(const FilterUnit *filter_unit, Tuple &tuple);
 
 private:
   FilterStmt *filter_stmt_ = nullptr;

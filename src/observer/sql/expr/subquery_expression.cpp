@@ -1,11 +1,15 @@
 #include "subquery_expression.h"
 
-RC SubQueryExpr::init_with_value_list(const FieldExpr *left_fieldmeta, const Value *value_list, size_t value_num)
+RC SubQueryExpr::init_with_value_list(const FieldExpr *left_fieldexpr, const Value *value_list, size_t value_num)
 {
-  assert(left_fieldmeta->type() == ExprType::FIELD);
+  assert(left_fieldexpr->type() == ExprType::FIELD);
   RC rc = RC::SUCCESS;
-  std::vector<const FieldMeta *> schema = {left_fieldmeta->field().meta()};
-  AttrType expect_attr_type = left_fieldmeta->field().attr_type();
+  const FieldMeta *left_meta = left_fieldexpr->field().meta();
+  FieldMeta *new_field_meta = new FieldMeta();
+  new_field_meta->init(
+      left_meta->name(), left_meta->type(), 0, left_meta->len(), left_meta->visible(), left_meta->nullable());
+  std::vector<const FieldMeta *> schema = {new_field_meta};
+  AttrType expect_attr_type = left_fieldexpr->field().attr_type();
   for (size_t i = 0; i < value_num; i++) {
     TempTuple *new_tuple = new TempTuple();
     new_tuple->set_schema(schema);
@@ -31,9 +35,6 @@ RC SubQueryExpr::init_with_subquery_stmt(Stmt *select_stmt)
   // 子查询中出现与父查询关联的表时，需要走完全不同的执行逻辑
   bool is_associated = false;
   for (FilterUnit *filter_unit : select_stmt_->filter_stmt()->filter_units()) {
-    if (!filter_unit->have_subquery()) {
-      continue;
-    }
     if (filter_unit->left()->type() == ExprType::FIELD) {
       FieldExpr *left_field_expr = (FieldExpr *)filter_unit->left();
       if (common::is_blank(left_field_expr->table_name())) {
@@ -153,7 +154,7 @@ RC SubQueryExpr::init_and_execute_associated_query(const Tuple &outer_query_tupl
 
 RC SubQueryExpr::get_value(const Tuple &tuple, TupleCell &cell) const
 {
-  if (select_stmt_ && select_stmt_->do_aggregate() && sub_query_results_.size() > 0) {
+  if (sub_query_results_.size() == 1) {
     return sub_query_results_[0]->cell_at(0, cell);
   }
   return RC::SUCCESS;

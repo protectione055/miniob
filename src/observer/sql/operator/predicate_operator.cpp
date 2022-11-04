@@ -49,6 +49,20 @@ RC PredicateOperator::next()
       break;
     }
 
+    if (filter_stmt_ == nullptr || filter_stmt_->filter_units().empty()) {
+      return rc;
+    }
+
+    for (const FilterUnit *filter_unit : filter_stmt_->filter_units()) {
+      if (filter_unit->have_subquery()) {
+        rc = init_subquery(filter_unit, *tuple);
+        if (rc != RC::SUCCESS) {
+          LOG_ERROR("failed to initialize subquery");
+          return rc;
+        }
+      }
+    }
+
     if (do_predicate(*tuple)) {
       return rc;
     }
@@ -72,9 +86,7 @@ bool PredicateOperator::do_predicate(Tuple &tuple)
   if (filter_stmt_ == nullptr || filter_stmt_->filter_units().empty()) {
     return true;
   }
-
   for (const FilterUnit *filter_unit : filter_stmt_->filter_units()) {
-
     if (!filter_unit->have_subquery()) {
       Expression *left_expr = filter_unit->left();
       Expression *right_expr = filter_unit->right();
@@ -153,10 +165,40 @@ bool PredicateOperator::evaluate_subquery(const FilterUnit *filter_unit, Tuple &
   CompOp comp = filter_unit->comp();
   TupleCell left_cell;
   TupleCell right_cell;
+  if (comp != EXISTS && comp != NOT_EXISTS) {
+    left_expr->get_value(tuple, left_cell);
+  }
+  right_expr->get_value(tuple, right_cell);
+  switch (comp) {
+    case IN:
+      return ((SubQueryExpr *)right_expr)->in(left_cell);
+      break;
+    case NOT_IN:
+      return ((SubQueryExpr *)right_expr)->not_in(left_cell);
+      break;
+    case EXISTS:
+      return ((SubQueryExpr *)right_expr)->exists();
+    case NOT_EXISTS:
+      return ((SubQueryExpr *)right_expr)->not_exists();
+    default:
+      if (left_cell.attr_type() == UNDEFINED || right_cell.attr_type() == UNDEFINED) {
+        return false;
+      }
+      return compare_tuple_cell(comp, left_cell, right_cell);
+      break;
+  }
+  return false;
+}
+
+RC PredicateOperator::init_subquery(const FilterUnit *filter_unit, Tuple &tuple)
+{
+  Expression *left_expr = filter_unit->left();
+  Expression *right_expr = filter_unit->right();
   SubQueryExpr *left_subquery_expr = nullptr;
   SubQueryExpr *right_subquery_expr = nullptr;
+  RC rc = RC::SUCCESS;
 
-  if (left_expr->type() == ExprType::SUB_QUERY) {
+  if (left_expr && left_expr->type() == ExprType::SUB_QUERY) {
     left_subquery_expr = (SubQueryExpr *)left_expr;
     if (left_subquery_expr->status() == ASSOCIATED) {
       left_subquery_expr->init_and_execute_associated_query(tuple);
@@ -168,24 +210,16 @@ bool PredicateOperator::evaluate_subquery(const FilterUnit *filter_unit, Tuple &
       right_subquery_expr->init_and_execute_associated_query(tuple);
     }
   }
-  left_expr->get_value(tuple, left_cell);
-  right_expr->get_value(tuple, right_cell);
 
-  switch (comp) {
-    case IN:
-      return right_subquery_expr->in(left_cell);
-      break;
-    case NOT_IN:
-      return !right_subquery_expr->in(left_cell);
-      break;
-    default:
-      if (left_cell.attr_type() == UNDEFINED || right_cell.attr_type() == UNDEFINED) {
-        return false;
-      }
-      return compare_tuple_cell(comp, left_cell, right_cell);
-      break;
+  if (filter_unit->comp() != IN && filter_unit->comp() != NOT_IN && filter_unit->comp() != EXISTS &&
+      filter_unit->comp() != NOT_EXISTS) {
+    if ((left_subquery_expr && left_subquery_expr->result_num() > 1) ||
+        (right_subquery_expr && right_subquery_expr->result_num() > 1)) {
+      LOG_ERROR("more than one row returned by a subquery used as an expression");
+      return RC::GENERIC_ERROR;
+    }
   }
-  return false;
+  return rc;
 }
 
 // int PredicateOperator::tuple_cell_num() const

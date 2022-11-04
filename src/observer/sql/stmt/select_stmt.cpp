@@ -384,15 +384,20 @@ RC create_filter_for_where_stmt(Db *db, const Selects &select_sql, std::vector<T
   if (tables.size() == 1) {
     Table *default_table = nullptr;
     default_table = tables[0];
-    rc = FilterStmt::create(
-        db, default_table, &table_map, select_sql.conditions, select_sql.condition_num, reserved_filter_stmt);
+    rc = FilterStmt::create(db,
+        default_table,
+        &table_map,
+        select_sql.conditions,
+        select_sql.condition_num,
+        reserved_filter_stmt,
+        select_sql.is_subquery);
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot construct filter stmt");
       return rc;
     }
   } else {  //分开每个table对应的filter，两边都是常数的filter存放在所有table中
     FilterStmt *filter_stmt;
-    char *space = new char[select_sql.condition_num];
+    char *space = new char[select_sql.condition_num]();
     common::Bitmap bitmap(space, select_sql.condition_num);
     for (size_t i = 0; i < select_sql.relation_num; i++) {
       rc = FilterStmt::push_down_predicates(
@@ -418,7 +423,8 @@ RC create_filter_for_where_stmt(Db *db, const Selects &select_sql, std::vector<T
       remaining_conditions[remaining_num++] = select_sql.conditions[i];
     }
     if (remaining_num > 0) {
-      rc = FilterStmt::create(db, nullptr, &table_map, remaining_conditions, remaining_num, reserved_filter_stmt);
+      rc = FilterStmt::create(
+          db, nullptr, &table_map, remaining_conditions, remaining_num, reserved_filter_stmt, select_sql.is_subquery);
       if (rc != RC::SUCCESS) {
         LOG_WARN("cannot construct filter stmt");
         return rc;

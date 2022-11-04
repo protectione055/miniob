@@ -47,7 +47,7 @@ typedef struct {
   int   is_asc;          // is ascending order          是否升序
 } OrderAttr;
 
-typedef enum { ATTR, VALUE, SUB_QUERY, VALUE_LIST } CondExprType;
+typedef enum { ATTR, VALUE, SUB_QUERY, VALUE_LIST, NO_EXPR } CondExprType;
 
 typedef enum {
   EQUAL_TO,     //"="     0
@@ -62,6 +62,8 @@ typedef enum {
   NOT_IN,       //"not in"    9
   IS_NULL,
   IS_NOT_NULL,
+  EXISTS,
+  NOT_EXISTS,
   NO_OP
 } CompOp;
 

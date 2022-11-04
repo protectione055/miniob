@@ -159,6 +159,8 @@ void condition_init_with_subquery(Condition *condition, CompOp comp, CondExprTyp
       condition->right_query = (Selects *)malloc(sizeof(Selects));
       memcpy(condition->right_query, right_query, sizeof(Selects));
       break;
+    case NO_EXPR:
+      break;
   }
 }
 

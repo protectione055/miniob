@@ -25,18 +25,47 @@ public:
     return ExprType::SUB_QUERY;
   }
 
-  // 用于in运算，判断子查询结果中是否存在给定的key
   bool in(TupleCell &cell) const
   {
     for (TempTuple *tuple : sub_query_results_) {
       assert(tuple->cell_num() == 1);
       TupleCell cmp_cell;
       tuple->cell_at(0, cmp_cell);
-      if (cmp_cell.compare(cell) == 0) {
+      // in语句中不会对null值进行匹配，即查询不到null值记录
+      if (cell.attr_type() == NULLS) {
+        return false;
+      } else if (cmp_cell.attr_type() == NULLS) {
+        continue;
+      } else if (cmp_cell.compare(cell) == 0) {
         return true;
       }
     }
     return false;
+  }
+
+  bool not_in(TupleCell &cell) const
+  {
+    for (TempTuple *tuple : sub_query_results_) {
+      assert(tuple->cell_num() == 1);
+      TupleCell cmp_cell;
+      tuple->cell_at(0, cmp_cell);
+      // 这个比较真见鬼……
+      // not in 语句不会对null值进行匹配，即查询不到null值记录
+      if (cell.attr_type() == NULLS || cmp_cell.attr_type() == NULLS || cmp_cell.compare(cell) == 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool exists() const
+  {
+    return result_num() > 0;
+  }
+
+  bool not_exists() const
+  {
+    return result_num() == 0;
   }
 
   size_t result_num() const

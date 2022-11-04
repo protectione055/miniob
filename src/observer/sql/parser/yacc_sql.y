@@ -180,6 +180,8 @@ ParserContext *get_context(yyscan_t scanner)
 		NULL_
 		IS
 		IN_TOKEN
+		EXISTS_TOKEN
+
 %union {
   struct _Attr *attr;
   struct _Condition *condition1;
@@ -838,15 +840,15 @@ condition:
 			relation_attr_init(&right_attr, $5, $7);
 
 			// 判断是否同一表中的两个属性。若否，条件加入join中
-			if (strcmp($1, $5) != 0){
-				Condition condition;
-				condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
-				selects_append_joincond(&CONTEXT->ssql->sstr.selection, condition);
-			} else {
+			// if (strcmp($1, $5) != 0){
+			// 	Condition condition;
+			// 	condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+			// 	selects_append_joincond(&CONTEXT->ssql->sstr.selection, condition);
+			// } else {
 				Condition condition;
 				condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
 				CONTEXT->conditions[CONTEXT->condition_length++] = condition;
-			}
+			// }
     	}
 	| ID comOp sub_query
 	{
@@ -924,6 +926,14 @@ condition:
 		condition_init_with_value_list(&condition, CONTEXT->comp, ATTR, &left_attr, NULL, CONTEXT->value_list, CONTEXT->value_list_length);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		CONTEXT->value_list_length = 0;
+	}
+	| comOp sub_query{
+		Query *right_subquery = $2;
+		Condition condition;
+
+		condition_init_with_subquery(&condition, CONTEXT->comp, NO_EXPR, NULL, NULL, NULL, SUB_QUERY, NULL, NULL, &right_subquery->sstr.selection);
+		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		free(right_subquery);
 	}
     ;
 sub_query:
@@ -1100,6 +1110,8 @@ comOp:
     | IS NOT_TOKEN { CONTEXT->comp = IS_NOT_NULL; }
 	| IN_TOKEN {CONTEXT->comp = IN;}
 	| NOT_TOKEN IN_TOKEN {CONTEXT->comp = NOT_IN;}
+	| NOT_TOKEN EXISTS_TOKEN {CONTEXT->comp = NOT_EXISTS;}
+	| EXISTS_TOKEN {CONTEXT->comp = EXISTS;}
     ;
 
 load_data:

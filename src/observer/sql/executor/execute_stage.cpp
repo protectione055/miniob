@@ -289,6 +289,9 @@ IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
   for (const FilterUnit *filter_unit : filter_units) {
     Expression *left = filter_unit->left();
     Expression *right = filter_unit->right();
+    if (!left || !right) {
+      return nullptr;
+    }
     if(left->type() == ExprType::VALUE && right->type() == ExprType::FIELD) {
       std::swap(left, right);
     }
@@ -500,7 +503,7 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
 
   if (rc != RC::RECORD_EOF) {
     LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
-    session_event->set_response("FAILED\n");
+    session_event->set_response("FAILURE\n");
     project_oper->close();
   } else {
     
