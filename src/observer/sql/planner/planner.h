@@ -7,6 +7,7 @@
 #include "sql/operator/delete_operator.h"
 #include "sql/operator/project_operator.h"
 #include "sql/operator/hash_aggregate_operator.h"
+#include "sql/operator/order_operator.h"
 #include "sql/operator/join_operator.h"
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/select_stmt.h"

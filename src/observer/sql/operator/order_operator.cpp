@@ -34,7 +34,7 @@ RC OrderOperator::next()
           break;
         }
         //由于子节点取到的tuple可能在同一物理位置，next后被覆盖，因此对其进行深拷贝
-        TempTuple *new_tuple = new TempTuple(*tuple);
+        TempTuple *new_tuple = new TempTuple(tuple);
         tuple_list.push_back(new_tuple);
       }
       load_data = true; 

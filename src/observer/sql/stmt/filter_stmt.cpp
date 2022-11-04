@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "storage/common/db.h"
 #include "storage/common/table.h"
+#include "common/lang/bitmap.h"
 #include "sql/expr/subquery_expression.h"
 
 FilterStmt::~FilterStmt()
@@ -41,7 +42,10 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
     FilterUnit *filter_unit = nullptr;
     
     rc = create_filter_unit(db, default_table, tables, conditions[i], filter_unit);
-    
+    if (filter_unit->is_associated_query()) {
+      tmp_stmt->is_associated_query_ = true;
+    }
+
     if (rc != RC::SUCCESS) {
       delete tmp_stmt;
       LOG_WARN("failed to create filter unit. condition index=%d", i);
@@ -101,6 +105,49 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     return RC::INVALID_ARGUMENT;
   }
 
+  // 检查条件表达式是否合法
+  switch (condition.comp) {
+    case IN:
+    case NOT_IN:
+      /* code */
+      // IN/NOT_IN运算符中，左子式只能有一行结果，右子式必须子查询
+      if (condition.left_expr_type == SUB_QUERY && !((Selects *)condition.left_query)->is_aggr ||
+          condition.right_expr_type != SUB_QUERY) {
+        return RC::INVALID_ARGUMENT;
+      }
+      break;
+    default:
+      // 非集合运算符左右子式只能有一行结果
+      if (condition.left_expr_type == SUB_QUERY && !((Selects *)condition.left_query)->is_aggr ||
+          condition.right_expr_type == SUB_QUERY && !((Selects *)condition.right_query)->is_aggr) {
+        return RC::INVALID_ARGUMENT;
+      }
+      break;
+  }
+
+  // collect tables in `where` statement if this query is a `sub-query`
+  // 子查询中出现与父查询关联的表时，需要走完全不同的执行逻辑
+  bool associated_query = false;
+  if (condition.left_is_attr) {
+    if (common::is_blank(condition.left_attr.relation_name)) {
+      LOG_WARN("Cannot find the table corresponding to the attribute");
+      return RC::MISMATCH;
+    }
+    if (tables->find(condition.left_attr.relation_name) == tables->end()) {
+      associated_query = true;
+    }
+  }
+
+  if (condition.right_is_attr) {
+    if (common::is_blank(condition.right_attr.relation_name)) {
+      LOG_WARN("Cannot find the table corresponding to the attribute");
+      return RC::MISMATCH;
+    }
+    if (tables->find(condition.right_attr.relation_name) == tables->end()) {
+      associated_query = true;
+    }
+  }
+
   Expression *left = nullptr;
   Expression *right = nullptr;
   AttrType left_type, right_type;
@@ -123,11 +170,11 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     query.flag = SCF_SELECT;
     query.sstr.selection = *(Selects *)condition.left_query;
     Stmt::create_stmt(db, query, stmt);
-    if (dynamic_cast<SelectStmt *>(stmt)->query_fields().size() > 1) {
-      LOG_WARN("too much argument in subquery");
+    if (rc != RC::SUCCESS || dynamic_cast<SelectStmt *>(stmt)->query_fields().size() > 1) {
+      LOG_WARN("invalid argument in subquery");
       return RC::INVALID_ARGUMENT;
     }
-    left = new SubQueryExpr(stmt);
+    left = new SubQueryExpr(stmt, associated_query);
   }
 
   if (condition.right_expr_type == ATTR) {
@@ -154,20 +201,21 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       LOG_WARN("invalid argument in subquery");
       return RC::INVALID_ARGUMENT;
     }
-    right = new SubQueryExpr(stmt);
+    right = new SubQueryExpr(stmt, associated_query);
   }
 
   filter_unit = new FilterUnit;
   filter_unit->set_comp(comp);
   filter_unit->set_left(left);
   filter_unit->set_right(right);
+  filter_unit->set_associated(associated_query);
 
   return rc;
 }
 
-RC FilterStmt::create_by_table(Db *db, Table *table, std::unordered_map<std::string, Table *> *tables,
-		      const Condition *conditions, int condition_num,
-		      FilterStmt *&stmt)
+// 将conditions中可以下推的谓语下推到scan_operator上
+RC FilterStmt::push_down_predicates(Db *db, Table *table, std::unordered_map<std::string, Table *> *tables,
+    const Condition *conditions, int condition_num, FilterStmt *&stmt, common::Bitmap &bitmap)
 {
   RC rc = RC::SUCCESS;
   stmt = nullptr;
@@ -175,6 +223,10 @@ RC FilterStmt::create_by_table(Db *db, Table *table, std::unordered_map<std::str
   FilterStmt *tmp_stmt = new FilterStmt();
   for (int i = 0; i < condition_num; i++) {
     FilterUnit *filter_unit = nullptr;
+    // 子查询不进行下推
+    if (conditions[i].left_expr_type == SUB_QUERY || conditions[i].right_expr_type == SUB_QUERY) {
+      continue;
+    }
     rc = create_table_filter_unit(db, table, tables, conditions[i], filter_unit);
     if (rc != RC::SUCCESS) {
       if (rc == RC::MISMATCH) continue;
@@ -182,6 +234,7 @@ RC FilterStmt::create_by_table(Db *db, Table *table, std::unordered_map<std::str
       LOG_WARN("failed to create filter unit. condition index=%d", i);
       return rc;
     }
+    bitmap.set_bit(i);  // 标记第i个谓词已经被下推
     tmp_stmt->filter_units_.push_back(filter_unit);
   }
 
@@ -220,7 +273,8 @@ RC FilterStmt::create_table_filter_unit(Db *db, Table *table, std::unordered_map
   }
 
   if (condition.right_is_attr) {
-    if(strcmp(condition.left_attr.relation_name, table->name())!=0) return RC::MISMATCH;
+    if (strcmp(condition.right_attr.relation_name, table->name()) != 0)
+      return RC::MISMATCH;
     Table *temp = nullptr;
     const FieldMeta *field = nullptr;
     rc = get_table_and_field(db, nullptr, tables, condition.right_attr, temp, field);  

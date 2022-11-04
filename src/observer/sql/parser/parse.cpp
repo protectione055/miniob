@@ -98,6 +98,8 @@ void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr
     int right_is_attr, RelAttr *right_attr, Value *right_value)
 {
   condition->comp = comp;
+  condition->left_is_attr = left_is_attr;
+  condition->right_is_attr = right_is_attr;
   if (left_is_attr) {
     condition->left_expr_type = ATTR;
     condition->left_attr = *left_attr;
@@ -121,11 +123,14 @@ void condition_init_with_subquery(Condition *condition, CompOp comp, CondExprTyp
     Selects *right_query)
 {
   condition->comp = comp;
+  condition->left_is_attr = 0;
+  condition->right_is_attr = 0;
   condition->left_expr_type = left_expr_type;
   condition->right_expr_type = right_expr_type;
   // 确定Select结构体可以直接赋值？
   switch (left_expr_type) {
     case ATTR:
+      condition->left_is_attr = 1;
       condition->left_attr = *left_attr;
       break;
     case VALUE:
@@ -139,6 +144,7 @@ void condition_init_with_subquery(Condition *condition, CompOp comp, CondExprTyp
 
   switch (right_expr_type) {
     case ATTR:
+      condition->right_is_attr = 1;
       condition->right_attr = *right_attr;
       break;
     case VALUE:

@@ -57,6 +57,10 @@ public:
   {
     right_ = expr;
   }
+  void set_associated(bool is_associated)
+  {
+    is_associated_query_ = is_associated;
+  }
   Expression *left() const
   {
     return left_;
@@ -98,10 +102,16 @@ public:
     return RC::SUCCESS;
   }
 
+  bool is_associated_query() const
+  {
+    return is_associated_query_;
+  }
+
 private:
   CompOp comp_ = NO_OP;
   Expression *left_ = nullptr;
   Expression *right_ = nullptr;
+  bool is_associated_query_ = false;
 };
 
 class FilterStmt 
@@ -125,13 +135,18 @@ public:
   static RC create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
 			       const Condition &condition, FilterUnit *&filter_unit);
 
-  static RC create_by_table(Db *db, Table *table, std::unordered_map<std::string, Table *> *tables,
-			const Condition *conditions, int condition_num,
-			FilterStmt *&stmt);
+  static RC push_down_predicates(Db *db, Table *table, std::unordered_map<std::string, Table *> *tables,
+      const Condition *conditions, int condition_num, FilterStmt *&stmt, common::Bitmap &bitmap);
 
   static RC create_table_filter_unit(Db *db, Table *table, std::unordered_map<std::string, Table *> *tables,
 			       const Condition &condition, FilterUnit *&filter_unit);
 
+  bool is_associated_query() const
+  {
+    return is_associated_query_;
+  }
+
 private:
   std::vector<FilterUnit *>  filter_units_; // 默认当前都是AND关系
+  bool is_associated_query_ = false;
 };

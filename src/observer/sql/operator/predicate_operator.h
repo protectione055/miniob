@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include "sql/operator/operator.h"
+#include "sql/expr/subquery_expression.h"
 
 class FilterStmt;
 
@@ -40,6 +41,7 @@ public:
   //RC tuple_cell_spec_at(int index, TupleCellSpec &spec) const override;
 private:
   bool do_predicate(Tuple &tuple);
+  RC execute_subquery(SubQueryExpr *sub_query);
 
 private:
   FilterStmt *filter_stmt_ = nullptr;

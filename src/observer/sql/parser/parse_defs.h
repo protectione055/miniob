@@ -99,6 +99,7 @@ typedef struct _Condition {
 
 // struct of select
 typedef struct {
+  int is_subquery;
   int is_aggr;                    // flag of select type, 1 if it will do aggregation
   size_t attr_num;                // Length of attrs in Select clause
   RelAttr attributes[MAX_NUM];    // attrs in Select clause

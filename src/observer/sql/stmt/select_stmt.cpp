@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/string.h"
 #include "storage/common/db.h"
 #include "storage/common/table.h"
+#include "common/lang/bitmap.h"
 
 const char *const aggr_name[] = {
     "NOT_AGGR",
@@ -59,13 +60,13 @@ RC check_field_in_group(bool is_aggr, const FieldMeta *field_meta, std::vector<F
 
 SelectStmt::~SelectStmt()
 {
-  while (!filter_stmts_.empty()) {
-    delete filter_stmts_.back();
-    filter_stmts_.pop_back();
+  while (!push_down_filter_stmts_.empty()) {
+    delete push_down_filter_stmts_.back();
+    push_down_filter_stmts_.pop_back();
   }
 
-  delete join_stmt_;
-  join_stmt_ = nullptr;
+  delete join_keys_;
+  join_keys_ = nullptr;
   delete having_stmt_;
   having_stmt_ = nullptr;
 }
@@ -360,35 +361,56 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   }
 
   // create filter statement in `where` statement
-  std::vector<FilterStmt *> filter_stmts;
   FilterStmt *filter_stmt = nullptr;
+  std::vector<FilterStmt *> push_down_filter_stmts;  //需要下推的谓语
   if (tables.size() == 1) {
     Table *default_table = nullptr;
     default_table = tables[0];
-    RC rc = FilterStmt::create(db, default_table, &table_map,
-          select_sql.conditions, select_sql.condition_num, filter_stmt);
+    rc =
+        FilterStmt::create(db, default_table, &table_map, select_sql.conditions, select_sql.condition_num, filter_stmt);
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot construct filter stmt");
       return rc;
     }
-    filter_stmts.push_back(filter_stmt);
   }else{//分开每个table对应的filter，两边都是常数的filter存放在所有table中
-    for(size_t i=0; i<select_sql.relation_num; i++){
-      RC rc = FilterStmt::create_by_table(db, tables[i], &table_map,
-            select_sql.conditions, select_sql.condition_num, filter_stmt);
+    char *space = new char[select_sql.condition_num];
+    common::Bitmap bitmap(space, select_sql.condition_num);
+    for (size_t i = 0; i < select_sql.relation_num; i++) {
+      rc = FilterStmt::push_down_predicates(
+          db, tables[i], &table_map, select_sql.conditions, select_sql.condition_num, filter_stmt, bitmap);
       if (rc != RC::SUCCESS) {
         LOG_WARN("cannot construct filter stmt");
         return rc;
       }
-      filter_stmts.push_back(filter_stmt);
+      push_down_filter_stmts.push_back(filter_stmt);
     }
+    // 没有被下推的conditions记录到filter_stmt_
+    Condition *remaining_conditions = new Condition[select_sql.condition_num];
+    size_t remaining_num = 0;
+    filter_stmt = nullptr;
+    for (size_t i = 0; i < select_sql.condition_num; i++) {
+      if (bitmap.get_bit(i)) {
+        continue;
+      }
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("cannot construct filter stmt");
+        return rc;
+      }
+      remaining_conditions[remaining_num++] = select_sql.conditions[i];
+    }
+    if (remaining_num > 0) {
+      rc = FilterStmt::create(db, nullptr, &table_map, remaining_conditions, remaining_num, filter_stmt);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("cannot construct filter stmt");
+        return rc;
+      }
+    }
+    delete space;
   }
-  filter_stmt = nullptr;
 
   // 创建join相关conds列表
-  FilterStmt *join_stmt = nullptr;
-  rc = FilterStmt::create(db, nullptr, &table_map,
-        select_sql.join_conds, select_sql.join_cond_num, join_stmt);
+  FilterStmt *join_keys = nullptr;
+  rc = FilterStmt::create(db, nullptr, &table_map, select_sql.join_conds, select_sql.join_cond_num, join_keys);
   if (rc != RC::SUCCESS) {
     LOG_WARN("cannot construct join filter stmt");
     return rc;
@@ -410,8 +432,9 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   select_stmt->tables_.swap(tables);
   select_stmt->query_fields_.swap(query_fields);
   select_stmt->order_fields_.swap(order_fields);
-  select_stmt->filter_stmts_.swap(filter_stmts);
-  select_stmt->join_stmt_ = join_stmt;
+  select_stmt->filter_stmt_ = filter_stmt;
+  select_stmt->push_down_filter_stmts_.swap(push_down_filter_stmts);
+  select_stmt->join_keys_ = join_keys;
   select_stmt->do_aggr_ = select_sql.is_aggr;  // 告知执行器生成aggregate_operator
   select_stmt->having_stmt_ = having_stmt;
   select_stmt->group_keys_.swap(group_by_keys);

@@ -30,53 +30,47 @@ RC Planner::create_select_plan(SelectStmt *select_stmt, Operator *&root)
   // 创建scan节点
   const std::vector<Table *> tables = select_stmt->tables();
   Operator *scan_oper;
-  std::queue<Operator *> oper_queue;
-  assert(tables.size() == 1);  // 在单表查询下测试
-  if (tables.size() == 1) {
-    // 单表查询尝试使用索引扫描
-    
-    scan_oper = try_to_create_index_scan_operator(select_stmt->filter_stmt());
+
+  std::unordered_map<std::string, Operator *> table_operator_map;
+  if (select_stmt->tables().empty()) {
+    LOG_WARN("invalid argument. size of tables = 0");
+    return RC::INVALID_ARGUMENT;
+  }
+  for (int i = 0; i < select_stmt->tables().size(); i++) {
+    FilterStmt *filter_stmt = select_stmt->push_down_filter_stmts(i);
+    Table *table = select_stmt->tables()[i];
+    Operator *scan_oper = try_to_create_index_scan_operator(filter_stmt);
     if (nullptr == scan_oper) {
-      scan_oper = new TableScanOperator(select_stmt->tables()[0]);
-    }
-    oper_queue.push(scan_oper);
-  } else {
-    // 多表查询
-    for (Table *table : tables) {
       scan_oper = new TableScanOperator(table);
-      oper_queue.push(scan_oper);
     }
+    PredicateOperator *pred_oper = new PredicateOperator(filter_stmt);
+    pred_oper->add_child(scan_oper);
+    table_operator_map[table->table_meta().name()] = pred_oper;
   }
 
-  //创建join-tree
-  //   while (oper_queue.size() > 1) {
-  // JoinOperator *join_oper = new JoinOperator();
-  // Operator *left = oper_queue.front();
-  // Operator *right = oper_queue.front();
-  // join_oper->add_child(left);
-  // join_oper->add_child(right);
-  // oper_queue.push(join_oper);
-  //   }
-  scan_oper = oper_queue.front();
+  Operator *join_oper = JoinOperator::create_join_tree(table_operator_map, select_stmt->join_keys());
 
-  PredicateOperator *pred_oper = new PredicateOperator(select_stmt->filter_stmt());
-  pred_oper->add_child(scan_oper);
+  OrderOperator *order_oper = new OrderOperator(select_stmt->order_fields());
 
   ProjectOperator *project_oper = new ProjectOperator();
   if (select_stmt->do_aggregate()) {
     HashAggregateOperator *aggregate_oper =
         new HashAggregateOperator(select_stmt->query_fields(), select_stmt->group_keys(), select_stmt->having_stmt());
-    aggregate_oper->add_child(pred_oper);
-    project_oper->add_child(aggregate_oper);
-    
+    aggregate_oper->add_child(join_oper);
+    order_oper->add_child(aggregate_oper);
+
   } else {
-    project_oper->add_child(pred_oper);
-    
+    order_oper->add_child(join_oper);
   }
 
+  project_oper->add_child(order_oper);
+
   // 给project_operator设定投影关系
+  bool multi_table = false;
+  if (select_stmt->tables().size() > 1)
+    multi_table = true;
   for (const Field &field : select_stmt->query_fields()) {
-    project_oper->add_projection(field.table(), field.meta());
+    project_oper->add_projection(field.table(), field.meta(), multi_table);
   }
 
   root = project_oper;

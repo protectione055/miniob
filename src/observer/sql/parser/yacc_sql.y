@@ -43,6 +43,7 @@ typedef struct ParserContext {
 
 void query_stack_push(ParserContext *context)
 {
+  printf("query_stack_push: \n BEFORE:\n stack-depth:=%d,\n context->condition_length=%d,\n context->value_length=%d\n", context->query_stack_depth, context->condition_length, context->value_length);
   QueryContext *stack = context->query_stack;
   size_t depth = context->query_stack_depth;
   // 保存当前ParserContext状态
@@ -73,11 +74,12 @@ void query_stack_push(ParserContext *context)
   context->having_condition_length  = 0;
   context->from_length  = 0;
   context->value_length  = 0;
-  printf("query_stack_push: stack-depth:=%d, context->condition_length=%d, context->value_length=%d", context->query_stack_depth, context->condition_length, context->value_length);
+  printf("AFTER: stack-depth:=%d,\n context->condition_length=%d,\n context->value_length=%d\n", context->query_stack_depth, context->condition_length, context->value_length);
 }
 
 void query_stack_pop(ParserContext *context)
 {
+  printf("query_stack_pop:\n BEFORE:\n stack-depth:=%d,\n context->condition_length=%d,\n context->value_length=%d\n", context->query_stack_depth, context->condition_length, context->value_length);
   QueryContext *stack = context->query_stack;
   size_t depth = context->query_stack_depth - 1;
   memcpy(context, &stack[depth], sizeof(QueryContext));
@@ -109,6 +111,7 @@ void query_stack_pop(ParserContext *context)
   stack[depth].from_length = 0;
   stack[depth].value_length = 0;
   context->query_stack_depth--;
+  printf("AFTER: \n stack-depth:=%d,\n context->condition_length=%d,\n context->value_length=%d\n", context->query_stack_depth, context->condition_length, context->value_length);
 }
 
 //获取子串
@@ -136,7 +139,7 @@ void yyerror(yyscan_t scanner, const char *str)
   	context->ssql->sstr.insertion.value_num[i] = 0;
   }
   context->ssql->sstr.insertion.tuple_num = 0;
-  printf("parse sql failed. error=%s", str);
+  printf("parse sql failed. error=%s\n", str);
 }
 
 ParserContext *get_context(yyscan_t scanner)
@@ -538,6 +541,7 @@ select:				/*  select 语句的语法解析树*/
 			selects_append_conditions(&CONTEXT->ssql->sstr.selection, CONTEXT->conditions, CONTEXT->condition_length);
 
 			CONTEXT->ssql->flag=SCF_SELECT;//"select";
+			CONTEXT->ssql->sstr.selection.is_subquery=0;
 			// CONTEXT->ssql->sstr.selection.attr_num = CONTEXT->select_length;
 
 			//临时变量清零
@@ -679,8 +683,8 @@ rel_list:
 				selects_append_relation(&CONTEXT->ssql->sstr.selection, $2);
 		  }
     | INNER JOIN ID ON join_cond join_cond_list join_list {	
-				selects_append_relation(&CONTEXT->ssql->sstr.selection, $3);
-		  }
+		selects_append_relation(&CONTEXT->ssql->sstr.selection, $3);
+	}
     ;
 join_list:
     /* empty */
@@ -930,8 +934,10 @@ condition:
 
 		Condition condition;
 		condition_init_with_subquery(&condition, CONTEXT->comp, SUB_QUERY, NULL, NULL, &left_subquery->sstr.selection, ATTR, &right_attr, NULL, NULL);
+		printf("1condition_length=%d\n", CONTEXT->condition_length);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		free(left_subquery);
+		printf("2condition_length=%d\n", CONTEXT->condition_length);
 	}
 	| sub_query comOp ID DOT ID
 	{
@@ -943,6 +949,19 @@ condition:
 		condition_init_with_subquery(&condition, CONTEXT->comp, SUB_QUERY, NULL, NULL, &left_subquery->sstr.selection, ATTR, &right_attr, NULL, NULL);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		free(left_subquery);
+		printf("s op t.a condition_length=%d\n", CONTEXT->condition_length);
+	}
+	| sub_query comOp sub_query
+	{
+		Query *left_subquery = $1;
+		Query *right_subquery = $3;
+		
+		Condition condition;
+		condition_init_with_subquery(&condition, CONTEXT->comp, SUB_QUERY, NULL, NULL, &left_subquery->sstr.selection, SUB_QUERY, NULL, NULL, &right_subquery->sstr.selection);
+		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+		free(left_subquery);
+		free(right_subquery);
+		printf("s op s condition_length=%d\n", CONTEXT->condition_length);
 	}
     ;
 sub_query:
@@ -952,15 +971,11 @@ sub_query:
 		selects_append_conditions(&CONTEXT->ssql->sstr.selection, CONTEXT->conditions, CONTEXT->condition_length);
 
 		CONTEXT->ssql->flag=SCF_SELECT;//"select";
+		CONTEXT->ssql->sstr.selection.is_subquery=1;
 		// CONTEXT->ssql->sstr.selection.attr_num = CONTEXT->select_length;
 		$$ = CONTEXT->ssql;
         
 		query_stack_pop(CONTEXT);
-		//临时变量清零
-		CONTEXT->condition_length=0;
-		CONTEXT->from_length=0;
-		CONTEXT->select_length=0;
-		CONTEXT->value_length = 0;
 	}
 	;
 sub_query_init:

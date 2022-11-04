@@ -1,14 +1,16 @@
 #include "expression.h"
 #include "sql/stmt/select_stmt.h"
+#include "sql/planner/planner.h"
 #include "sql/expr/tuple.h"
 
 class SubQueryExpr : public Expression {
 public:
   SubQueryExpr() = default;
-  SubQueryExpr(Stmt *select_stmt)
+  SubQueryExpr(Stmt *select_stmt, bool is_associated)
   {
     assert(select_stmt->type() == StmtType::SELECT);
     select_stmt_ = (SelectStmt *)select_stmt;
+    associated_query_ = is_associated;
     // for (const Field &field : select_stmt_->query_fields()) {
     //   sub_query_fieldmetas_.push_back(const_cast<FieldMeta *>(field.meta()));
     // }
@@ -17,13 +19,7 @@ public:
   }
   ~SubQueryExpr() = default;
 
-  RC get_value(const Tuple &tuple, TupleCell &cell) const override
-  {
-    if (select_stmt_->do_aggregate() && sub_query_results_.size() > 0) {
-      return sub_query_results_[0]->cell_at(0, cell);
-    }
-    return RC::SUCCESS;
-  }
+  RC get_value(const Tuple &tuple, TupleCell &cell) const override;
 
   ExprType type() const override
   {
@@ -61,10 +57,18 @@ public:
     return sub_query_results_.size();
   }
 
+  bool is_associated_query() const
+  {
+    return associated_query_;
+  }
+
 private:
+  RC execute_subquery(SelectStmt *select_stmt);
+
   SelectStmt *select_stmt_ = nullptr;  //子查询树
                                        //   std::vector<FieldMeta *> sub_query_fieldmetas_;  // 子查询select的字段
   //   std::multimap<Key, TempTuple *> sub_query_result_;  // 子查询的结果，子查询是聚合查询时只会有一条结果
+  bool associated_query_ = false;
   std::vector<TempTuple *> sub_query_results_;
   //   std::map<Key, TempTuple *>::iterator iter_;    // 子查询结果迭代器
 };
