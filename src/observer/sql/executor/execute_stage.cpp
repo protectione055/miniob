@@ -285,6 +285,23 @@ IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
     return nullptr;
   }
 
+  // check all filter statements, must be like `field compOp value`
+  for (const FilterUnit *filter_unit : filter_units) {
+    Expression *left = filter_unit->left();
+    Expression *right = filter_unit->right();
+    if(left->type() == ExprType::VALUE && right->type() == ExprType::FIELD) {
+      std::swap(left, right);
+    }
+    if(!(left->type() == ExprType::FIELD && right->type() == ExprType::VALUE)) {
+      return nullptr;
+    }
+    TupleCell value_cell;
+    ((ValueExpr*)right)->get_tuple_cell(value_cell);
+    if(value_cell.attr_type() == NULLS) { // currently we don't index NULLs
+      return nullptr;
+    }
+  }
+
   // 在所有过滤条件中，找到字段与值做比较的条件，然后判断字段是否可以使用索引
   // 如果是多列索引，这里的处理需要更复杂。
   // 这里的查找规则是比较简单的，就是尽量找到使用相等比较的索引
@@ -304,7 +321,7 @@ IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
     table = field.table();
     indexes = (table->indexes()); // again, 偷懒, copy
   }
-  
+
   const Index *use_index = nullptr;
 
   for(const Index *index : indexes) {
@@ -322,8 +339,7 @@ IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
 
         Expression *left = filter_unit->left();
         Expression *right = filter_unit->right();
-        if (left->type() == ExprType::FIELD && right->type() == ExprType::VALUE) {
-        } else if (left->type() == ExprType::VALUE && right->type() == ExprType::FIELD) {
+        if (left->type() == ExprType::VALUE && right->type() == ExprType::FIELD) {
           std::swap(left, right);
         }
         FieldExpr &left_field_expr = *(FieldExpr *)left;

@@ -22,6 +22,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/tuple_cell.h"
 #include "sql/expr/expression.h"
 #include "storage/record/record.h"
+#include "sql/stmt/typecast.h"
 
 class Table;
 
@@ -34,10 +35,8 @@ public:
 
   ~TupleCellSpec()
   {
-    if (expression_) {
-      delete expression_;
-      expression_ = nullptr;
-    }
+    // isn't really safe to delete expression_
+    // memory leak it is :D
   }
 
   void set_alias(const char *alias)
@@ -101,6 +100,7 @@ public:
     for (const FieldMeta &field : *fields) {
       speces_.push_back(new TupleCellSpec(new FieldExpr(table, &field)));
     }
+    nullmap_meta_ = table->table_meta().field("__nullmap");
   }
 
   int cell_num() const override
@@ -118,9 +118,13 @@ public:
     const TupleCellSpec *spec = speces_[index];
     FieldExpr *field_expr = (FieldExpr *)spec->expression();
     const FieldMeta *field_meta = field_expr->field().meta();
-    cell.set_type(field_meta->type());
-    cell.set_data(this->record_->data() + field_meta->offset());
-    cell.set_length(field_meta->len());
+    if(is_null_at(index)) {
+      cell.set_null();
+    } else {
+      cell.set_type(field_meta->type());
+      cell.set_data(this->record_->data() + field_meta->offset());
+      cell.set_length(field_meta->len());
+    }
     return RC::SUCCESS;
   }
 
@@ -136,7 +140,7 @@ public:
       const FieldExpr * field_expr = (const FieldExpr *)speces_[i]->expression();
       const Field &field = field_expr->field();
       if (0 == strcmp(field_name, field.field_name())) {
-	return cell_at(i, cell);
+	      return cell_at(i, cell);
       }
     }
     return RC::NOTFOUND;
@@ -161,10 +165,20 @@ public:
   {
     return *record_;
   }
+
+  virtual bool is_null_at(int index) const override
+  {
+    if(nullmap_meta_ == nullptr) return false;
+    int nullmap = (int)this->record_->data()[nullmap_meta_->offset()]; // 32bit null bitmap
+    return (nullmap >> index)&1;
+  }
 private:
+
+
   Record *record_ = nullptr;
   const Table *table_ = nullptr;
   std::vector<TupleCellSpec *> speces_;
+  const FieldMeta *nullmap_meta_ = nullptr;
 };
 
 /*
@@ -230,203 +244,94 @@ public:
     spec = speces_[index];
     return RC::SUCCESS;
   }
+  virtual bool is_null_at(int index) const override
+  {
+    return tuple_->is_null_at(index);
+  }
 private:
   std::vector<TupleCellSpec *> speces_;
   Tuple *tuple_ = nullptr;
 };
 
 // 查询结束即销毁的临时tuple
+// TODO: This class is highly similar to RowTuple. It's basically an enhanced version
+// of RowTuple, and shares a lot of similar functionalities. Maybe we should merge them?   
+// 
+// TempTuple doesn't have __trx like a RowRecord does
+// And __nullmap isn't stored as a field, instead it's just a variable in memory
 class TempTuple : public Tuple {
 public:
-  TempTuple() = default;
+  TempTuple() {};
   virtual ~TempTuple()
   {
     for (TupleCellSpec *spec : speces_) {
-      delete spec;
+      // delete spec;
+
+      // we messed up and lost track of how and where we share
+      // our pointers, so it's not safe to delete here
+      // oh well, memory leak again hhhh
     }
     speces_.clear();
-    if (record_.data() != nullptr) {
-      free(record_.data());
+    if (data_ != nullptr) {
+      free(data_); // realloc-ed
+      data_ = nullptr;
     }
   }
 
-  TempTuple(const TempTuple &t)
-  {
-    size_t data_len = 0.;
-    for (int i = 0; i < t.cell_num(); i++) {
-      TupleCell cell;
-      const TupleCellSpec *cell_spec;
-      t.cell_at(i, cell);
-      t.cell_spec_at(i, cell_spec);
-      data_len += cell.length();
-      FieldExpr *field_expr = (FieldExpr *)cell_spec->expression();
-      Field field = field_expr->field();
-      FieldExpr *new_field_expr = new FieldExpr(field.table(), field.meta());
-      TupleCellSpec *new_spec = new TupleCellSpec(new_field_expr);
-      this->speces_.push_back(new_spec);
-    }
-    char *data = nullptr;
-    if (data_len > 0) {
-      data = new char[data_len];
-      memcpy(data, t.record().data(), data_len);
-      record_.set_data(data);
-    }
+  TempTuple(const TempTuple &t) {
+    append_tuple(t);
   }
 
-  TempTuple(const Tuple *other)
-  {
-    std::vector<FieldMeta *> fields;
-    size_t first_offset = 0;
-    for (size_t i = 0; i < other->cell_num(); i++) {
-      const TupleCellSpec *cell_spec = nullptr;
-      other->cell_spec_at(i, cell_spec);
-      FieldExpr *field_expr = (FieldExpr *)cell_spec->expression();
-      const FieldMeta *field_meta = field_expr->field().meta();
-      if (i == 0) {
-        // 记录第一个可见字段的offset，临时tuple中不保存sys_fields
-        first_offset = field_meta->offset();
-      }
-      FieldMeta *new_field_meta = new FieldMeta();
-      new_field_meta->init(field_meta->name(),
-          field_meta->type(),
-          field_meta->offset() - first_offset,
-          field_meta->len(),
-          field_meta->visible());
-      fields.push_back(new_field_meta);
-    }
-    this->set_schema(fields);
-
-    size_t offset = 0;
-    for (size_t i = 0; i < other->cell_num(); i++) {
-      FieldMeta *field_meta = fields[i];
-      TupleCell cell;
-      other->cell_at(i, cell);
-      memcpy(this->record_.data() + offset, cell.data(), field_meta->len());
-      offset += field_meta->len();
-    }
-  }
-
-  //tuple 2合1，只保留tuple a的trx字段
-  TempTuple(const Tuple &a, const Tuple &b){
-    
-    size_t data_len = 0.;
-    for (int i = 0; i < a.cell_num(); i++) {
-      TupleCell cell;
-      const TupleCellSpec *cell_spec;
-      a.cell_at(i, cell);
-      a.cell_spec_at(i, cell_spec);
-      FieldExpr *field_expr = (FieldExpr *)cell_spec->expression();
-      Field field = field_expr->field();
-      FieldExpr *new_field_expr = new FieldExpr(field.table(), field.meta());
-      TupleCellSpec *new_spec = new TupleCellSpec(new_field_expr);
-      data_len += cell.length();
-      this->speces_.push_back(new_spec);
-    }
-    
-    for (int i = 1; i < b.cell_num(); i++) {
-      TupleCell cell;
-      const TupleCellSpec *cell_spec;
-      b.cell_at(i, cell);
-      b.cell_spec_at(i, cell_spec);
-      FieldExpr *field_expr = (FieldExpr *)cell_spec->expression();
-      Field field = field_expr->field();
-      const FieldMeta *meta = field.meta();
-      FieldMeta *new_meta = new FieldMeta();
-      new_meta->init(meta->name(), meta->type(), data_len, meta->len(), meta->visible());
-      FieldExpr *new_field_expr = new FieldExpr(field.table(), new_meta);
-      TupleCellSpec *new_spec = new TupleCellSpec(new_field_expr);
-      data_len += cell.length();
-      this->speces_.push_back(new_spec);
-    }
-
-    char *data = nullptr;
-    if (data_len > 0) {
-      data = new char[data_len];
-      int offset = 0;
-      for (int i = 0; i < a.cell_num(); i++) {
-        TupleCell cell;
-        a.cell_at(i, cell);
-        memcpy(data + offset, cell.data(), cell.length());
-        offset += cell.length();
-      }
-      for (int i = 1; i < b.cell_num(); i++) {
-        TupleCell cell;
-        b.cell_at(i, cell);
-        memcpy(data + offset, cell.data(), cell.length());
-        offset += cell.length();
-      }
-    }
-    record_.set_data(data);
-  }
-
-  TempTuple &operator=(const TempTuple &other)
-  {
-    if (&other != this) {
-      size_t data_len = 0.;
-      for (int i = 0; i < other.cell_num(); i++) {
-        TupleCell cell;
-        const TupleCellSpec *cell_spec;
-        other.cell_at(i, cell);
-        other.cell_spec_at(i, cell_spec);
-        data_len += cell.length();
-        FieldExpr *field_expr = (FieldExpr *)cell_spec->expression();
-        Field field = field_expr->field();
-        FieldExpr *new_field_expr = new FieldExpr(field.table(), field.meta());
-        TupleCellSpec *new_spec = new TupleCellSpec(new_field_expr);
-        this->speces_.push_back(new_spec);
-      }
-      char *data = nullptr;
-      if (data_len > 0) {
-        data = new char[data_len];
-        memcpy(data, other.record().data(), data_len);
-        record_.set_data(data);
-      }
-    }
-
+  TempTuple &operator=(const TempTuple &t) {
+    append_tuple(t);
     return *this;
   }
 
+  TempTuple(const Tuple &t) {
+    append_tuple(t);
+  }
+
+  TempTuple(const Tuple &a, const Tuple &b){
+    append_tuple(a);
+    append_tuple(b);
+  }
+  
   // 元组比较
-  int compare(const TempTuple &other) const
-  {
-    assert(this->speces_.size() == other.speces_.size());
-    int res = 0;
+  int compare(const Tuple &other) const {
     if (&other == this) {
-      return res;
+      return 0;
     }
     for (size_t i = 0; i < speces_.size(); i++) {
       TupleCell this_cell, other_cell;
       this->cell_at(i, this_cell);
       other.cell_at(i, other_cell);
       int cmp_res = this_cell.compare(other_cell);
-      if (cmp_res == 0)
-        continue;
-      else {
-        res = cmp_res;
-        break;
+      if (cmp_res != 0) {
+        return cmp_res;
       }
     }
-    return res;
+    return 0;
   }
 
-  void set_schema(const std::vector<FieldMeta *> fields)
+  // all fields are cleared to null by default
+  void set_schema(const std::vector<const FieldMeta *> fields)
   {
     speces_.clear();
     this->speces_.reserve(fields.size());
-    size_t data_len = 0;
-    for (FieldMeta *field : fields) {
-      data_len += field->len();
+    nullmap_ = 0;
+    data_len_ = 0;
+    for (const FieldMeta *field : fields) {
+      data_len_ += field->len();
       speces_.push_back(new TupleCellSpec(new FieldExpr(nullptr, field)));
     }
-    char *data = (char *)malloc(sizeof(char) * data_len);
-    memset(data, 0, sizeof(char) * data_len);
-    record_.set_data(data);
+    data_ = (char*)realloc(data_, data_len_);
+    memset(data_, 0, data_len_);
+    for(size_t i=0;i<fields.size();i++) {
+      set_null(i, true);
+    }
   }
 
-  int cell_num() const override
-  {
-    return speces_.size();
-  }
+  int cell_num() const override { return speces_.size(); }
 
   RC cell_at(int index, TupleCell &cell) const override
   {
@@ -438,32 +343,82 @@ public:
     const TupleCellSpec *spec = speces_[index];
     FieldExpr *field_expr = (FieldExpr *)spec->expression();
     const FieldMeta *field_meta = field_expr->field().meta();
-    cell.set_type(field_meta->type());
-    cell.set_data(this->record_.data() + field_meta->offset());
-    cell.set_length(field_meta->len());
+    if(is_null_at(index)) { // check null
+      cell.set_null();
+    } else {
+      cell.set_type(field_meta->type());
+      cell.set_data(data_ + field_meta->offset());
+      cell.set_length(field_meta->len());
+    }
     return RC::SUCCESS;
+  }
+
+  // pass nullptr as data to set null, otherwise clears null
+  // todo: check nullability
+  RC cell_set(int index, const char *data) {
+    if (index < 0 || index >= static_cast<int>(speces_.size())) {
+      LOG_WARN("cell_set: invalid argument. index=%d", index);
+      return RC::INVALID_ARGUMENT;
+    }
+    if(data == nullptr) {
+      set_null(index, true);
+    } else {
+      set_null(index, false);
+      const FieldMeta *field_meta = field_by_index(index);
+      memcpy(&data_[field_meta->offset()], data, field_meta->len());
+    }
+    return RC::SUCCESS;
+  }
+
+  // convenience method, for aggregating.
+  // *sets cell to v if null*
+  RC cell_value_add(int index, Value v) {
+    if (index < 0 || index >= static_cast<int>(speces_.size())) {
+      LOG_WARN("cell_value_add: invalid argument. index=%d", index);
+      return RC::INVALID_ARGUMENT;
+    }
+    const FieldMeta *field_meta = field_by_index(index);
+    AttrType attr_type = field_meta->type();
+    char *data = &data_[field_meta->offset()];
+    if(is_null_at(index)) {
+      set_null(index, false);
+    }
+    if (attr_type != v.type) {
+      RC rc = try_typecast(&v, v, attr_type);
+      if (rc != RC::SUCCESS) {
+        LOG_ERROR("failed to typecast from type %d to %d", v.type, attr_type);
+        return rc;
+      }
+    }
+
+    switch (field_meta->type()) {
+      case INTS:
+        *(int *)data += *(int *)v.data;
+        break;
+      case FLOATS:
+        *(float *)data += *(float *)v.data;
+        break;
+      default:
+        LOG_WARN("cast unknown type to float, god knows what's gonna happen..");
+        *(float *)data += *(float *)v.data;
+        break;
+    }
+    return RC::SUCCESS;
+  }
+
+  // convenience method, for aggregating.
+  // *sets cell to delta if null*
+  RC cell_int_add(int index, int delta) {
+    return cell_value_add(index, Value{INTS, (void*)&delta});
   }
 
   RC find_cell(const Field &field, TupleCell &cell) const override
   {
-    const char *field_name = field.field_name();
-    if (field.table() == nullptr) {
-      for (size_t i = 0; i < speces_.size(); ++i) {
-        const FieldExpr *field_expr = (const FieldExpr *)speces_[i]->expression();
-        const Field &field = field_expr->field();
-        if (0 == strcmp(field_name, field.field_name())) {
-          return cell_at(i, cell);
-        }
-      }
-    } else {
-      const char *table_name = field.table_name();
-      for (size_t i = 0; i < speces_.size(); ++i) {
-        const FieldExpr *field_expr = (const FieldExpr *)speces_[i]->expression();
-        const Field &field = field_expr->field();
-        if (0 == strcmp(field_name, field.field_name())) {
-          if (field.table() == nullptr) return cell_at(i, cell);
-          else if (0 == strcmp(table_name, field.table_name())) return cell_at(i, cell);
-        }
+    for (size_t i = 0; i < speces_.size(); i++) {
+      const Field &cur_field = ((const FieldExpr *)speces_[i]->expression())->field();
+      if (strcmp(field.field_name(), cur_field.field_name()) == 0) {
+        if(field.table() && cur_field.table() && field.table_name() != cur_field.table_name()) continue;
+        return cell_at(i, cell);
       }
     }
     return RC::NOTFOUND;
@@ -479,28 +434,80 @@ public:
     return RC::SUCCESS;
   }
 
-  Record &record()
-  {
-    return record_;
-  }
+  const char *data() const { return data_; }
+  void reset_data() { memset(data_, 0, data_len_); }
 
-  const Record &record() const
-  {
-    return record_;
-  }
-
-  void reset_data()
-  {
-    TupleCellSpec *last_cell = *(speces_.end() - 1);
-    FieldExpr *expr = (FieldExpr *)last_cell->expression();
-    const FieldMeta *last_meta = expr->field().meta();
-    size_t data_len = last_meta->offset() + last_meta->len();
-    memset(record_.data(), 0, data_len);
+  virtual bool is_null_at(int index) const override {
+    return ((nullmap_ >> index)&1);
   }
 
 private:
+
+  void append_tuple(const Tuple &t) {
+    size_t new_data_len = data_len_; 
+    size_t old_field_num = speces_.size();
+    bool *is_invisible = new bool[t.cell_num()]; 
+    size_t *field_lens = new size_t[t.cell_num()]; 
+    for (int i = 0; i < t.cell_num(); i++) {
+      const TupleCellSpec *cell_spec;
+      t.cell_spec_at(i, cell_spec);
+      Field field = ((FieldExpr *)cell_spec->expression())->field();
+      const FieldMeta *meta = field.meta();
+      is_invisible[i] = !meta->visible();
+      if(is_invisible[i]) { // skip invisible fields (eg. sys_fields)
+        continue;
+      }
+      FieldMeta *new_meta = new FieldMeta();
+      new_meta->init(meta->name(), meta->type(), new_data_len, meta->len(), meta->visible(), meta->nullable());
+      field_lens[i] = new_meta->len();
+      new_data_len += field_lens[i];
+      speces_.push_back(new TupleCellSpec(new FieldExpr(field.table(), new_meta)));
+    }
+
+    if (new_data_len > data_len_) { // resize data_, then copy new data over
+      data_ = (char*)realloc(data_, new_data_len);
+
+      int idxoffset = 0; // offset caused by the absence of invisible fields
+      for (int i = 0; i < t.cell_num(); i++) {
+        if(is_invisible[i]) { // skip invisible fields (eg. sys_fields)
+          idxoffset++;
+          continue;
+        }
+        TupleCell cell;
+        t.cell_at(i, cell);
+        if(cell.attr_type() == NULLS) {
+          set_null(old_field_num + i - idxoffset, true);
+        } else {
+          cell_set(old_field_num + i - idxoffset, cell.data());
+        }
+      }
+    }
+    data_len_ = new_data_len;
+    delete[] is_invisible;
+    delete[] field_lens;
+  }
+
+  const FieldMeta *field_by_index(int index) {
+    const TupleCellSpec *spec = speces_[index];
+    FieldExpr *field_expr = (FieldExpr *)spec->expression();
+    return field_expr->field().meta();
+  }
+
+  // clears underlying data to 0 whenever null state changes
+  void set_null(int index, bool is_null) {
+    const FieldMeta *field_meta = field_by_index(index);
+    memset(data_ + field_meta->offset(), 0, field_meta->len());
+    if(is_null) {
+      nullmap_ |= 1<<index;
+    } else {
+      nullmap_ &= ~(1<<index);
+    }
+  }
+
   std::vector<TupleCellSpec *> speces_;
-  Record record_;
+  char *data_ = nullptr;
+  size_t data_len_ = 0;
+  int nullmap_ = 0;
 };
 
 class Key {
@@ -527,7 +534,7 @@ public:
     RC rc = RC::SUCCESS;
 
     // 构造key schema
-    std::vector<FieldMeta *> key_fieldmetas;
+    std::vector<const FieldMeta *> key_fieldmetas;
     size_t offset = 0;
     for (const Field &field : group_by_keys) {
       const FieldMeta *field_meta = field.meta();

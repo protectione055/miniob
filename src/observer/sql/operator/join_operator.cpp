@@ -4,6 +4,7 @@
 
 #include "common/log/log.h"
 #include "sql/operator/join_operator.h"
+#include "sql/operator/predicate_operator.h"
 #include "storage/record/record.h"
 #include "storage/common/table.h"
 #include "sql/expr/tuple.h"
@@ -171,33 +172,7 @@ bool JoinOperator::do_predicate(Tuple *tuple)
     left_expr->get_value(*tuple, left_cell);
     right_expr->get_value(*right_tuple_, right_cell);
 
-    bool filter_result = false;
-    const int compare = left_cell.compare(right_cell);
-    switch (comp) {
-      case EQUAL_TO: {
-        filter_result = (0 == compare);
-      } break;
-      case LESS_EQUAL: {
-        filter_result = (compare <= 0);
-      } break;
-      case NOT_EQUAL: {
-        filter_result = (compare != 0);
-      } break;
-      case LESS_THAN: {
-        filter_result = (compare < 0);
-      } break;
-      case GREAT_EQUAL: {
-        filter_result = (compare >= 0);
-      } break;
-      case GREAT_THAN: {
-        filter_result = (compare > 0);
-      } break;
-      default: {
-        LOG_WARN("invalid compare type: %d", comp);
-      } break;
-    }
-
-    if (!filter_result) {
+    if(PredicateOperator::compare_tuple_cell(comp, left_cell, right_cell) == false) {
       return false;
     }
   }

@@ -58,8 +58,8 @@ typedef enum {
   GREAT_THAN,   //">"     5
   LIKE,         //"like"  6
   NOT_LIKE,     //"not like"  7
-  IN,           //"in"    8
-  NOT_IN,       //"not in"    9
+  IS_NULL,
+  IS_NOT_NULL,
   NO_OP
 } CompOp;
 
@@ -70,6 +70,7 @@ typedef enum {
   INTS,
   FLOATS,
   DATES,
+  NULLS, // can be casted into null of any type
 } AttrType;
 
 //属性值
@@ -146,6 +147,7 @@ typedef struct {
   char *name;     // Attribute name
   AttrType type;  // Type of attribute
   size_t length;  // Length of attribute
+  int nullable;   // Is this attribute nullable
 } AttrInfo;
 
 // struct of craete_table
@@ -245,6 +247,7 @@ void value_init_integer(Value *value, int v);
 void value_init_float(Value *value, float v);
 void value_init_string(Value *value, const char *v);
 void value_init_date(Value *value, time_t v);
+void value_init_null(Value *value);
 void value_destroy(Value *value);
 void subquery_destroy(void **query);
 
@@ -252,7 +255,7 @@ void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr
     int right_is_attr, RelAttr *right_attr, Value *right_value);
 void condition_destroy(Condition *condition);
 
-void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length);
+void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length, int nullable);
 void attr_info_destroy(AttrInfo *attr_info);
 
 void selects_init(Selects *selects, ...);

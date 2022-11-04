@@ -57,7 +57,7 @@ RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
     // check fields type
     AttrType field_type = field_meta->type();
     Value v = update.values[i];
-    if(v.type != field_type) {
+    if(v.type != NULLS && v.type != field_type) {
       if(try_typecast(&v, v, field_type) != RC::SUCCESS) {
         LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d", 
                 table_name, field_meta->name(), field_type, v.type);

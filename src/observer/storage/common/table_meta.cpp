@@ -40,15 +40,23 @@ void TableMeta::swap(TableMeta &other) noexcept
 
 RC TableMeta::init_sys_fields()
 {
-  sys_fields_.reserve(1);
-  FieldMeta field_meta;
-  RC rc = field_meta.init(Trx::trx_field_name(), Trx::trx_field_type(), 0, Trx::trx_field_len(), false);
+  sys_fields_.reserve(2);
+  FieldMeta trx_field_meta;
+  RC rc = trx_field_meta.init(Trx::trx_field_name(), Trx::trx_field_type(), 0, Trx::trx_field_len(), false, /* nullable */false);
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to init trx field. rc = %d:%s", rc, strrc(rc));
     return rc;
   }
+  sys_fields_.push_back(trx_field_meta);
 
-  sys_fields_.push_back(field_meta);
+  // currently we create __nullmap field no matter what. can be optimized.
+  FieldMeta nullmap_meta; // reinitialize, just in case.
+  rc = nullmap_meta.init("__nullmap", INTS, trx_field_meta.offset() + trx_field_meta.len(), /* length */4, false, /* nullable */false);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to init __nullmap field. rc = %d:%s", rc, strrc(rc));
+    return rc;
+  }
+  sys_fields_.push_back(nullmap_meta);
   return rc;
 }
 RC TableMeta::init(const char *name, int field_num, const AttrInfo attributes[])
@@ -82,13 +90,14 @@ RC TableMeta::init(const char *name, int field_num, const AttrInfo attributes[])
 
   for (int i = 0; i < field_num; i++) {
     const AttrInfo &attr_info = attributes[i];
-    rc = fields_[i + sys_fields_.size()].init(attr_info.name, attr_info.type, field_offset, attr_info.length, true);
+    FieldMeta &field_meta = fields_[i + sys_fields_.size()];
+    rc = field_meta.init(attr_info.name, attr_info.type, field_offset, attr_info.length, true, attr_info.nullable);
     if (rc != RC::SUCCESS) {
       LOG_ERROR("Failed to init field meta. table name=%s, field name: %s", name, attr_info.name);
       return rc;
     }
 
-    field_offset += attr_info.length;
+    field_offset += field_meta.len();
   }
 
   record_size_ = field_offset;

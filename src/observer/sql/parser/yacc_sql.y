@@ -209,8 +209,10 @@ ParserContext *get_context(yyscan_t scanner)
 		INNER
 		JOIN
 		ASC
-		IN_TOKEN
 		NULLABLE
+		NULL_
+		IS
+		IN_TOKEN
 %union {
   struct _Attr *attr;
   struct _Condition *condition1;
@@ -242,7 +244,7 @@ ParserContext *get_context(yyscan_t scanner)
 %type <number> number;
 %type <number> aggregate;
 %type <number> order_type;
-%type <query> sub_query
+%type <number> nullable;
 
 %%
 
@@ -380,59 +382,25 @@ attr_def_list:
     ;
     
 attr_def:
-    ID_get type LBRACE number RBRACE 
+    ID_get type LBRACE number RBRACE nullable
 		{
 			AttrInfo attribute;
-			attr_info_init(&attribute, CONTEXT->id, $2, $4);
+			attr_info_init(&attribute, CONTEXT->id, $2, $4, $6);
 			create_table_append_attribute(&CONTEXT->ssql->sstr.create_table, &attribute);
-			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name =(char*)malloc(sizeof(char));
-			// strcpy(CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name, CONTEXT->id); 
-			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].type = $2;  
-			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].length = $4;
 			CONTEXT->value_length++;
 		}
-    |ID_get type
+    |ID_get type nullable
 		{
 			AttrInfo attribute;
-			attr_info_init(&attribute, CONTEXT->id, $2, 4);
+			attr_info_init(&attribute, CONTEXT->id, $2, 4, $3);
 			create_table_append_attribute(&CONTEXT->ssql->sstr.create_table, &attribute);
-			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name=(char*)malloc(sizeof(char));
-			// strcpy(CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name, CONTEXT->id); 
-			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].type=$2;  
-			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].length=4; // default attribute length
 			CONTEXT->value_length++;
 		}
-    |ID_get TEXT_T
+    |ID_get TEXT_T nullable // dirty hack, just to make the length 4096
 		{
 			AttrInfo attribute;
-			attr_info_init(&attribute, CONTEXT->id, CHARS, 4096);
+			attr_info_init(&attribute, CONTEXT->id, CHARS, 4096, $3);
 			create_table_append_attribute(&CONTEXT->ssql->sstr.create_table, &attribute);
-			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name=(char*)malloc(sizeof(char));
-			// strcpy(CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name, CONTEXT->id); 
-			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].type=$2;  
-			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].length=4; // default attribute length
-			CONTEXT->value_length++;
-		}
-	    |ID_get type NULLABLE
-		{
-			AttrInfo attribute;
-			attr_info_init(&attribute, CONTEXT->id, $2, 4);
-			create_table_append_attribute(&CONTEXT->ssql->sstr.create_table, &attribute);
-			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name=(char*)malloc(sizeof(char));
-			// strcpy(CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name, CONTEXT->id); 
-			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].type=$2;  
-			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].length=4; // default attribute length
-			CONTEXT->value_length++;
-		}
-    |ID_get TEXT_T NULLABLE
-		{
-			AttrInfo attribute;
-			attr_info_init(&attribute, CONTEXT->id, CHARS, 4096);
-			create_table_append_attribute(&CONTEXT->ssql->sstr.create_table, &attribute);
-			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name=(char*)malloc(sizeof(char));
-			// strcpy(CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name, CONTEXT->id); 
-			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].type=$2;  
-			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].length=4; // default attribute length
 			CONTEXT->value_length++;
 		}
     ;
@@ -446,11 +414,16 @@ type:
 	   | DATE_T { $$=DATES; }
        ;
 order_type:
-
     /* empty */ { $$=1; }
 	   | ASC  { $$=1; }
        | DESC { $$=0; }
        ;
+
+nullable:
+	/* empty */ { $$=0; }
+	| NOT_TOKEN NULL_ { $$=0; }
+	| NULLABLE { $$=1; }
+
 ID_get:
 	ID 
 	{
@@ -504,6 +477,9 @@ value:
 			$1 = substr($1,1,strlen($1)-2);
   		value_init_string(&CONTEXT->values[CONTEXT->value_length++], $1);
 		}
+	|NULL_ {
+		value_init_null(&CONTEXT->values[CONTEXT->value_length++]);
+	}
     ;
     
 delete:		/*  delete 语句的语法解析树*/
@@ -1126,8 +1102,9 @@ comOp:
     | NE { CONTEXT->comp = NOT_EQUAL; }
     | LIKE_TOKEN { CONTEXT->comp = LIKE; }
     | NOT_TOKEN LIKE_TOKEN { CONTEXT->comp = NOT_LIKE; }
-	| IN_TOKEN {CONTEXT->comp = IN;}
-	| NOT_TOKEN IN_TOKEN {CONTEXT->comp = NOT_IN;}
+	// hack for IS NULL and IS NOT NULL, dirty, but works
+    | IS { CONTEXT->comp = IS_NULL; }
+    | IS NOT_TOKEN { CONTEXT->comp = IS_NOT_NULL; }
     ;
 
 load_data:

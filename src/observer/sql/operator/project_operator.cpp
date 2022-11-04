@@ -57,10 +57,7 @@ void ProjectOperator::add_projection(const Table *table, const FieldMeta *field_
   TupleCellSpec *spec = new TupleCellSpec(new FieldExpr(table, field_meta));
   
   if(multi_table){
-    std::string *fullname = new std::string(table->name());
-    fullname->append(".");
-    fullname->append(field_meta->name());
-    spec->set_alias(fullname->c_str());
+    spec->set_alias(strdup(field_meta->dirty_hack_name_with_tablename(table->name()).c_str())); // memory leak again
   }else{
     spec->set_alias(field_meta->name());
   }
