@@ -486,6 +486,8 @@ select:				/*  select 语句的语法解析树*/
 
 			selects_append_conditions(&CONTEXT->ssql->sstr.selection, CONTEXT->conditions, CONTEXT->condition_length);
 
+			selects_append_having_conditions(&CONTEXT->ssql->sstr.selection, CONTEXT->having_conditions, CONTEXT->having_condition_length);
+
 			CONTEXT->ssql->flag=SCF_SELECT;//"select";
 			CONTEXT->ssql->sstr.selection.is_subquery=0;
 			// CONTEXT->ssql->sstr.selection.attr_num = CONTEXT->select_length;
@@ -978,8 +980,8 @@ having_condition:
     aggregate LBRACE STAR RBRACE comOp value 
 	{
 		RelAttr left_attr;
-		relation_attr_init(&left_attr, NULL, "COUNT(*)");
-		left_attr.aggr_type = COUNT;
+		relation_attr_init(&left_attr, NULL, "*");
+		left_attr.aggr_type = $1;
 
 		Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
 

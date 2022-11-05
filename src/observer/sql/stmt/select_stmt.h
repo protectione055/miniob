@@ -136,5 +136,5 @@ RC collect_groupby_keys(Db *db, const Selects &select_sql, std::vector<Table *> 
     std::unordered_map<std::string, Table *> &table_map, std::vector<Field> &group_by_keys);
 RC init_and_create_having_stmt(Db *db, const Selects &select_sql, const std::vector<Table *> &tables,
     const std::unordered_map<std::string, Table *> &table_map, std::vector<Field> &group_by_keys,
-    std::vector<Field> query_fields, size_t &attr_offset, HavingStmt *&having_stmt);
+    std::vector<Field> &query_fields, size_t &attr_offset, HavingStmt *&having_stmt);
 bool find_rel_attr(const RelAttr *rel_attr_collection, RelAttr target_rel_attr, size_t collections_size);

@@ -46,9 +46,6 @@ RC HashAggregateOperator::open()
       is_new_group = true;
     }
 
-    Key test_key(cur_group_key);
-    assert(!(test_key < cur_group_key));
-
     // 找到当前group
     if (key_tuples_.find(cur_group_key) == key_tuples_.end()) {
       assert(false);
@@ -76,7 +73,7 @@ RC HashAggregateOperator::open()
         if (is_new_group) {
           for (Field &g_field : group_by_keys_) {
             rc = RC::GENERIC_ERROR;
-            if (0 == strcmp(g_field.table_name(), field.table_name()) &&
+            if (field.aggregation_type() == NOT_AGGR && 0 == strcmp(g_field.table_name(), field.table_name()) &&
                 0 == strcmp(g_field.meta()->name(), field.sub_fieldmeta()->name())) {
               //假设字符串是定长
               assert(field_meta->len() == child_cell.length());
@@ -210,8 +207,7 @@ RC HashAggregateOperator::tuple_cell_spec_at(int index, const TupleCellSpec *&sp
   return iter_->second->cell_spec_at(index, spec);
 }
 
-// 处理having条件
-bool HashAggregateOperator::having(const Tuple *tuple, const FilterStmt *having_stmt) const
+bool HashAggregateOperator::having(const Tuple *tuple, const HavingStmt *having_stmt) const
 {
   if (having_stmt == nullptr || having_stmt->filter_units().empty()) {
     return true;

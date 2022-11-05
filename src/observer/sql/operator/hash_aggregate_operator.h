@@ -1,6 +1,7 @@
 #pragma once
 
 #include "sql/operator/operator.h"
+#include "sql/stmt/having_stmt.h"
 #include "rc.h"
 
 class FilterStmt;
@@ -8,7 +9,7 @@ class FilterStmt;
 class HashAggregateOperator : public Operator {
 public:
   HashAggregateOperator(
-      const std::vector<Field> &query_fields, const std::vector<Field> &group_by_keys, const FilterStmt *having_stmt)
+      const std::vector<Field> &query_fields, const std::vector<Field> &group_by_keys, const HavingStmt *having_stmt)
       : query_fields_(query_fields), group_by_keys_(group_by_keys), having_stmt_(having_stmt)
   {
     for (const Field &field : query_fields_) {
@@ -32,12 +33,13 @@ public:
   Tuple *current_tuple() override;
 
 protected:
-  bool having(const Tuple *tuple, const FilterStmt *having_stmt) const;
+  bool having(const Tuple *tuple, const HavingStmt *having_stmt) const;
 
 private:
+  void append_having_fields_to_query_fields(const HavingStmt *having_stmt);
   std::vector<Field> query_fields_;
   std::vector<FieldMeta *> field_meta_;  //聚合结果的fieldmeta
-  const FilterStmt *having_stmt_ = nullptr;
+  const HavingStmt *having_stmt_ = nullptr;
   std::vector<Field> group_by_keys_;
   std::map<Key, TempTuple *> key_tuples_;
   std::map<Key, std::map<int, int>> valid_count_;  //记录每个group上的各个avg结果的除数，只计算非空值的数量

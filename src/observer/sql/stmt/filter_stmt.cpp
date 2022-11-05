@@ -11,6 +11,7 @@ See the Mulan PSL v2 for more details. */
 //
 // Created by Wangyunlai on 2022/5/22.
 //
+#include <algorithm>
 
 #include "rc.h"
 #include "common/log/log.h"
@@ -283,4 +284,3 @@ RC FilterStmt::create_table_filter_unit(Db *db, Table *table, std::unordered_map
 
   return rc;
 }
-

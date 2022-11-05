@@ -315,6 +315,7 @@ void query_reset(Query *query);
 void query_destroy(Query *query);  // reset and delete
 
 void selects_append_groupkey(Selects *selects, RelAttr *rel_attr);
+void selects_append_having_conditions(Selects *selects, Condition conditions[], size_t condition_num);
 
 void condition_init_with_subquery(Condition *condition, CompOp comp, CondExprType left_expr_type, RelAttr *left_attr,
     Value *left_value, Selects *left_query, CondExprType right_expr_type, RelAttr *right_attr, Value *right_value,

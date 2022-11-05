@@ -509,7 +509,7 @@ RC collect_groupby_keys(Db *db, const Selects &select_sql, std::vector<Table *> 
 // TODO: 从having_condition中取出所有字段，聚合时合并到query_fields中
 RC init_and_create_having_stmt(Db *db, const Selects &select_sql, const std::vector<Table *> &tables,
     const std::unordered_map<std::string, Table *> &table_map, std::vector<Field> &group_by_keys,
-    std::vector<Field> query_fields, size_t &attr_offset, HavingStmt *&having_stmt)
+    std::vector<Field> &query_fields, size_t &attr_offset, HavingStmt *&having_stmt)
 {
   // fields in having clause will be marked as invisible, projection operator will ignore invisible fields
   RC rc = RC::SUCCESS;

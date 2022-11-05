@@ -17,10 +17,10 @@ RC Planner::create_executor(Operator *&root)
   return rc;
 }
 
+// TODO: fix it
 RC Planner::destroy_executor(Operator *&root)
 {
   // do nothing
-  
   return RC::SUCCESS;
 }
 
@@ -74,7 +74,9 @@ RC Planner::create_select_plan(SelectStmt *select_stmt, Operator *&root)
   if (select_stmt->tables().size() > 1)
     multi_table = true;
   for (const Field &field : select_stmt->query_fields()) {
-    project_oper->add_projection(field.table(), field.meta(), multi_table);
+    if (field.meta()->visible()) {
+      project_oper->add_projection(field.table(), field.meta(), multi_table);
+    }
   }
 
   root = project_oper;
