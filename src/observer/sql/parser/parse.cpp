@@ -241,6 +241,10 @@ void selects_append_joincond(Selects *selects, Condition condition)
 {
   selects->join_conds[selects->join_cond_num++] = condition;
 }
+void selects_append_exprcond(Selects *selects, Condition condition)
+{
+  selects->expr_conds[selects->expr_cond_num++] = condition;
+}
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num)
 {
   assert(condition_num <= sizeof(selects->conditions) / sizeof(selects->conditions[0]));

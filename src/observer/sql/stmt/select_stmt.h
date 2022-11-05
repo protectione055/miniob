@@ -82,6 +82,7 @@ public:
   {
     return join_keys_;
   }
+  FilterStmt *expr_stmt() const { return expr_stmt_; }
 
   HavingStmt *having_stmt() const
   {
@@ -104,6 +105,7 @@ private:
   FilterStmt *join_keys_ = nullptr;
   bool do_aggr_ = false;
   HavingStmt *having_stmt_ = nullptr;
+  FilterStmt *expr_stmt_ = nullptr;
   std::vector<Field> group_keys_;
 };
 

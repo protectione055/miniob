@@ -83,6 +83,15 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     return rc;
   }
 
+  // expression在join后统一处理，此处创建expression相关conds列表 (default_table默认tables[0])
+  FilterStmt *expr_stmt = nullptr;
+  rc = FilterStmt::create(db, tables[0], &table_map, select_sql.expr_conds, select_sql.expr_cond_num, expr_stmt);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("cannot construct join filter stmt");
+    return rc;
+  }
+
+
   // 创建join相关conds列表
   FilterStmt *join_keys = nullptr;
   rc = FilterStmt::create(
@@ -114,6 +123,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   select_stmt->do_aggr_ = select_sql.is_aggr;  // 告知执行器生成aggregate_operator
   select_stmt->having_stmt_ = having_stmt;
   select_stmt->group_keys_.swap(group_by_keys);
+  select_stmt->expr_stmt_ = expr_stmt;
   stmt = select_stmt;
   return RC::SUCCESS;
 }

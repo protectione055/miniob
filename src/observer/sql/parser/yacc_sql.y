@@ -960,7 +960,7 @@ condition:
 	}
 	|value comOp EXPRESSION 
 		{
-			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 2];
+			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 1];
 			
 			RelAttr right_attr;
 			relation_attr_init(&right_attr, NULL, $3);
@@ -968,8 +968,7 @@ condition:
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 1, &right_attr, NULL);
-			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
-
+			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
 		}
     |EXPRESSION comOp value 
 		{
@@ -981,7 +980,7 @@ condition:
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, right_value);
-			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
 
 		}
 	|ID comOp EXPRESSION 
@@ -995,7 +994,7 @@ condition:
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
-			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
 
 		}
     |EXPRESSION comOp ID
@@ -1009,7 +1008,7 @@ condition:
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
-			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
 		}
     |ID DOT ID comOp EXPRESSION
 		{
@@ -1022,7 +1021,7 @@ condition:
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
-			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
     	}
     |EXPRESSION comOp ID DOT ID
 		{
@@ -1035,7 +1034,7 @@ condition:
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
-			CONTEXT->conditions[CONTEXT->condition_length++] = condition;				
+			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);			
     	}
     |EXPRESSION comOp EXPRESSION
 		{
@@ -1049,7 +1048,7 @@ condition:
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
-			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
+			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
     	}
 
     ;

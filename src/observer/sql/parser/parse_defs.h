@@ -134,6 +134,8 @@ typedef struct {
   RelAttr group_by_keys[MAX_NUM];            // attr in group by clause
   Condition having_conditions[MAX_NUM];  // having clause for aggregation
   size_t having_condition_num;           // Length of conditions in having clause
+  size_t expr_cond_num;           // Length of join conditions in Fro clause
+  Condition expr_conds[MAX_NUM];  // join conditions in Fro clause
 } Selects;
 
 // struct of insert
@@ -282,6 +284,7 @@ void selects_init(Selects *selects, ...);
 void selects_append_attribute(Selects *selects, RelAttr *rel_attr);
 void selects_append_relation(Selects *selects, const char *relation_name);
 void selects_append_joincond(Selects *selects, Condition condition);
+void selects_append_exprcond(Selects *selects, Condition condition);
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num);
 void selects_append_orders(Selects *selects, OrderAttr *order_attr);
 void subquery_create_value_list(Value dst[], Value src[], size_t value_num);

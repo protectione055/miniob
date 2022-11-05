@@ -15,6 +15,8 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include <string.h>
+#include <unordered_map>
+#include <vector>
 #include "storage/common/field.h"
 #include "sql/expr/tuple_cell.h"
 #include "sql/parser/parse_defs.h"
@@ -131,6 +133,11 @@ public:
   {
     return ExprType::COMPLEX;
   }
+
+  static Expression *create_complex_expr(
+    const char* expr_str, 
+    std::unordered_map<std::string, Table *> &table_map, 
+    Table *default_table);
 
   RC get_value(const Tuple &tuple, TupleCell &cell) const override;
 
