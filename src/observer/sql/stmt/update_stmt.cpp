@@ -134,25 +134,17 @@ RC UpdateStmt::execute_subquery_get_value(Db *db, Selects *select_sql, Value &va
     return rc;
   }
 
-  int tuple_count = 0;
-  Tuple *tuple = nullptr;
-  while (root->next() == RC::SUCCESS) {
+  TupleCell tuple_cell;
+  for (int tuple_count = 0; root->next() == RC::SUCCESS; tuple_count++) {
     if (tuple_count > 0) {
       LOG_WARN("more than one row was returneds in update subquery");
       return RC::INVALID_ARGUMENT;
     }
-    tuple = root->current_tuple();
-    tuple_count++;
+    Tuple *tuple = root->current_tuple();
+    tuple->cell_at(0, tuple_cell);
+    value.type = tuple_cell.attr_type();
+    value.data = (void *)(tuple_cell.data());
   }
 
-  if (tuple->cell_num() > 1) {
-    LOG_WARN("too many column in update subquery result tuple. cell_num=%d", tuple->cell_num());
-    return RC::INVALID_ARGUMENT;
-  }
-
-  TupleCell tuple_cell;
-  tuple->cell_at(0, tuple_cell);
-  value.type = tuple_cell.attr_type();
-  value.data = (void *)(tuple_cell.data());  // Not safe, do this for now
   return rc;
 }
