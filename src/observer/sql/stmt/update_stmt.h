@@ -38,6 +38,8 @@ public:
   FilterStmt *filter_stmt() const { return filter_stmt_; }
 
 private:
+  static RC execute_subquery_get_value(Db *db, Selects *select_sql, Value &value);
+
   Table *table_ = nullptr;
   int attribute_num_;
   const char **attribute_names_ = nullptr;

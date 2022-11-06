@@ -361,7 +361,16 @@ void updates_init(Updates *updates, const char *relation_name, Condition conditi
 void updates_attr_init(Updates *updates, const char *attribute_name, Value *value)
 {
   updates->attribute_names[updates->attribute_num] = strdup(attribute_name);
+  updates->marks[updates->attribute_num] = VALUE;
   updates->values[updates->attribute_num] = *value;
+  updates->attribute_num++;
+}
+
+void updates_attr_init_with_subquery(Updates *updates, const char *attribute_name, Selects *selects)
+{
+  updates->attribute_names[updates->attribute_num] = strdup(attribute_name);
+  updates->marks[updates->attribute_num] = SUB_QUERY;
+  updates->selects[updates->attribute_num] = selects;
   updates->attribute_num++;
 }
 

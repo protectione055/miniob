@@ -145,6 +145,8 @@ typedef struct {
   size_t attribute_num;           // Number of attributes to update
   char *attribute_names[MAX_NUM]; // Attribute to update
   Value values[MAX_NUM];          // update value
+  Selects *selects[MAX_NUM];      // 子查询语句
+  CondExprType marks[MAX_NUM];    // 标记该字段上是实值（VALUE）还是子查询（SUB_QUERY）
   size_t condition_num;           // Length of conditions in Where clause
   Condition conditions[MAX_NUM];  // conditions in Where clause
 } Updates;
@@ -283,6 +285,7 @@ void deletes_destroy(Deletes *deletes);
 
 void updates_init(Updates *updates, const char *relation_name, Condition conditions[], size_t condition_num);
 void updates_attr_init(Updates *updates, const char *attribute_name, Value *value);
+void updates_attr_init_with_subquery(Updates *updates, const char *attribute_name, Selects *select);
 void updates_destroy(Updates *updates);
 
 void create_table_append_attribute(CreateTable *create_table, AttrInfo *attr_info);

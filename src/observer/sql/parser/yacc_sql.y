@@ -475,7 +475,11 @@ update_attr:
 		updates_attr_init(&CONTEXT->ssql->sstr.update, $1, &CONTEXT->values[0]);
 		CONTEXT->value_length = 0;
 	}
-
+    | ID EQ sub_query {
+		Query *query = $3;
+		updates_attr_init_with_subquery(&CONTEXT->ssql->sstr.update, $1, &query->sstr.selection);
+	}
+	;
 update_attr_list:
 	/* empty */ | COMMA update_attr update_attr_list {}
 select:				/*  select 语句的语法解析树*/
