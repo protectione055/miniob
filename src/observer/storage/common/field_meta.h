@@ -39,6 +39,7 @@ public:
   int len() const;
   bool visible() const;
   bool nullable() const;
+  bool is_expr() const;
 
   // 用来显示例如 AVG(table.relation) 这种格式的一个 dirty hack
   // 没有这个的话，会显示成 table.AVG(relation)
@@ -48,6 +49,7 @@ public:
 
 public:
   void desc(std::ostream &os) const;
+  void set_expr(){is_expr_ = true;}
 
 public:
   void to_json(Json::Value &json_value) const;
@@ -62,5 +64,6 @@ protected:
   int attr_len_;
   bool visible_;
   bool nullable_;
+  bool is_expr_ = false;
 };
 #endif  // __OBSERVER_STORAGE_COMMON_FIELD_META_H__

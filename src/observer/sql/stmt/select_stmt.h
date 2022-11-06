@@ -58,6 +58,7 @@ public:
 public:
   const std::vector<Table *> &tables() const { return tables_; }
   const std::vector<Field> &query_fields() const { return query_fields_; }
+  const std::vector<Expression *> &query_exprs() const { return query_exprs_; }
   const std::vector<std::tuple<FieldExpr, int>> &order_fields() const { return order_fields_; }
 
   FilterStmt *filter_stmt() const
@@ -98,6 +99,7 @@ public:
 
 private:
   std::vector<Field> query_fields_;
+  std::vector<Expression *> query_exprs_;
   std::vector<std::tuple<FieldExpr, int>> order_fields_;
   std::vector<Table *> tables_;
   FilterStmt *filter_stmt_;

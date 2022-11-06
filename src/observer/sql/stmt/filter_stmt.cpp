@@ -128,7 +128,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     if (!condition.left_attr.is_complex) {
       Table *table = nullptr;
       const FieldMeta *field = nullptr;
-      rc = get_table_and_field(db, default_table, tables, condition.left_attr, table, field);
+      rc = get_table_and_field(db, default_table, tables, condition.left_attr, table, field, is_subquery);
       if (rc != RC::SUCCESS) {
         LOG_WARN("cannot find attr");
         return rc;
@@ -136,7 +136,9 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       left_type = field->type();
       left = new FieldExpr(table, field);
     } else {
-      left = ComplexExpr::create_complex_expr(condition.left_attr.attribute_name, *tables, default_table);
+      std::vector<Field> expr_aggr; // shit
+      size_t attr_offset;
+      left = ComplexExpr::create_complex_expr(condition.left_attr.attribute_name, *tables, default_table, expr_aggr, attr_offset);
     }
   } else if (condition.left_expr_type == VALUE) {
     left_type = condition.left_value.type;
@@ -162,7 +164,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     if (!condition.right_attr.is_complex) {
       Table *table = nullptr;
       const FieldMeta *field = nullptr;
-      rc = get_table_and_field(db, default_table, tables, condition.right_attr, table, field);
+      rc = get_table_and_field(db, default_table, tables, condition.right_attr, table, field, is_subquery);
       if (rc != RC::SUCCESS) {
         LOG_WARN("cannot find attr");
         delete left;
@@ -171,7 +173,9 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       right_type = field->type();
       right = new FieldExpr(table, field);
     } else {
-      right = ComplexExpr::create_complex_expr(condition.right_attr.attribute_name, *tables, default_table);
+      std::vector<Field> expr_aggr; // shit
+      size_t attr_offset;
+      right = ComplexExpr::create_complex_expr(condition.right_attr.attribute_name, *tables, default_table, expr_aggr, attr_offset);
     }
   } else if (condition.right_expr_type == VALUE) {
     right_type = condition.right_value.type;

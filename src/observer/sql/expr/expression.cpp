@@ -100,12 +100,20 @@ void get_num(const char* expr_str, int &i){
   }
 }
 
-void get_name(const char* expr_str, int &i){
+char *get_name(const char* expr_str, int &i){
+  int start = i;
   while ((expr_str[i]>='a' &&  expr_str[i]<='z') || 
          (expr_str[i]>='A' &&  expr_str[i]<='Z') ||
          (expr_str[i]>='0' &&  expr_str[i]<='9') ||
          expr_str[i]>='_') 
     i++;
+  
+  char *name;
+  name = new char[i - start + 1];
+  name[i - start] = '\0';
+  memcpy(name, expr_str+start, i - start);
+
+  return name;
 }
 
 void get_ComplexExpr(std::vector<Expression *> &expr_stack, std::vector<char> &op_stack){
@@ -141,7 +149,7 @@ void get_ComplexExpr(std::vector<Expression *> &expr_stack, std::vector<char> &o
   expr_stack.push_back(res);
 }
 
-Expression *ComplexExpr::create_complex_expr(const char* expr_str, std::unordered_map<std::string, Table *> &table_map, Table *table)
+Expression *ComplexExpr::create_complex_expr(const char* expr_str, std::unordered_map<std::string, Table *> &table_map, Table *table, std::vector<Field> &expr_aggr, size_t &attr_offset)
 {
   std::vector<Expression *> expr_stack;
   std::vector<char> op_stack;
@@ -160,9 +168,87 @@ Expression *ComplexExpr::create_complex_expr(const char* expr_str, std::unordere
       continue;
     } 
 
+    if ((expr_str[i]>='a' &&  expr_str[i]<='z') || (expr_str[i]>='A' &&  expr_str[i]<='Z')) { //可能是ID或聚合
+      
+      char *attr_name, *relation_name, *aggr;
+      bool is_aggr = false;
+      int start = i;
+      char *str = get_name(expr_str, i);
+      
+      if (expr_str[i] == '(') {
+        is_aggr = true;
+        aggr = str;
+        str = get_name(expr_str, ++i);
+      }
+
+      if (expr_str[i] == '.') {
+        relation_name = str;
+        str = get_name(expr_str, ++i);
+        table = table_map[relation_name];
+        delete[] relation_name;
+      }
+      
+      if (!is_aggr) {
+        attr_name = str;
+        const FieldMeta *field_meta = nullptr;
+        field_meta = table->table_meta().field(attr_name);
+        expr_stack.push_back(new FieldExpr(table, field_meta));
+        new_expression = false;
+
+      } else {
+        int attr_len;
+        AttrType attr_type;
+        const FieldMeta *field_meta = nullptr;
+
+        FieldMeta *aggr_field_meta = new FieldMeta();
+        AggrType aggr_type = NOT_AGGR;
+        attr_name = str;
+        field_meta = table->table_meta().field(attr_name);
+        
+        char *aggr_name;
+        i++;  //聚合，跳过 ')'
+        aggr_name = new char[i - start + 1];
+        aggr_name[i - start] = '\0';
+        memcpy(aggr_name, expr_str+start, i - start);
+
+        if (strcmp(aggr, "count") == 0)    aggr_type = COUNT;
+        else if (strcmp(aggr, "min") == 0) aggr_type = MIN;
+        else if (strcmp(aggr, "max") == 0) aggr_type = MAX;
+        else if (strcmp(aggr, "sum") == 0) aggr_type = SUM;
+        else if (strcmp(aggr, "avg") == 0) aggr_type = AVG;
+        switch (aggr_type) {
+          case NOT_AGGR:
+          case MIN:
+          case MAX:
+          case SUM:
+            attr_len = field_meta->len();
+            attr_type = field_meta->type();
+            break;
+          case AVG:
+            attr_len = sizeof(float);
+            attr_type = FLOATS;
+            break;
+          case COUNT:
+            attr_len = sizeof(int);
+            attr_type = INTS;
+            break;
+        }
+
+        aggr_field_meta->init(aggr_name, attr_type, attr_offset, attr_len, false, field_meta->nullable());
+        expr_aggr.push_back(Field(table, aggr_field_meta, aggr_type, field_meta));
+        expr_stack.push_back(new FieldExpr(table, aggr_field_meta));
+
+        delete[] aggr;
+        attr_offset += attr_len;
+      }
+
+      new_expression = false;
+      delete[] str;
+      continue;
+    }
+
     if ((expr_str[i]>='a' &&  expr_str[i]<='z') || (expr_str[i]>='A' &&  expr_str[i]<='Z')) {
       
-      start = i;
       get_name(expr_str, i);
 
       if (expr_str[i] == '.') {
@@ -179,9 +265,9 @@ Expression *ComplexExpr::create_complex_expr(const char* expr_str, std::unordere
       attr_name = new char[i - start + 1];
       attr_name[i - start] = '\0';
       memcpy(attr_name, expr_str+start, i - start);
-      const FieldMeta *field_mate = nullptr;
-      field_mate = table->table_meta().field(attr_name);
-      expr_stack.push_back(new FieldExpr(table, field_mate));
+      const FieldMeta *field_meta = nullptr;
+      field_meta = table->table_meta().field(attr_name);
+      expr_stack.push_back(new FieldExpr(table, field_meta));
       new_expression = false;
       delete[] attr_name;
       continue;
