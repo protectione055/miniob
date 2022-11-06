@@ -87,6 +87,7 @@ bool PredicateOperator::do_predicate(Tuple &tuple)
     return true;
   }
   for (const FilterUnit *filter_unit : filter_stmt_->filter_units()) {
+    bool unit_result = false;
     if (!filter_unit->have_subquery()) {
       Expression *left_expr = filter_unit->left();
       Expression *right_expr = filter_unit->right();
@@ -95,14 +96,26 @@ bool PredicateOperator::do_predicate(Tuple &tuple)
       TupleCell right_cell;
       left_expr->get_value(tuple, left_cell);
       right_expr->get_value(tuple, right_cell);
-      if (PredicateOperator::compare_tuple_cell(comp, left_cell, right_cell) == false) {
-        return false;
-      }
-    } else if (evaluate_subquery(filter_unit, tuple) == false) {
-      return false;
+
+      unit_result = PredicateOperator::compare_tuple_cell(comp, left_cell, right_cell);
+    } else {
+      unit_result = evaluate_subquery(filter_unit, tuple);
+    }
+
+    switch (filter_stmt_->filter_mode()) {
+      case AND_MODE:
+        if (!unit_result) {
+          return false;
+        }
+        break;
+      case OR_MODE:
+        if (unit_result) {
+          return true;
+        }
+        break;
     }
   }
-  return true;
+  return filter_stmt_->filter_mode() == AND_MODE;
 }
 
 bool PredicateOperator::compare_tuple_cell(CompOp comp, TupleCell left_cell, TupleCell right_cell) {

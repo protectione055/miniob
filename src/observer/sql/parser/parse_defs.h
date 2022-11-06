@@ -104,6 +104,7 @@ typedef struct _Condition {
   Value values[MAX_NUM];  // List of values to check in IN/NOT_IN statements
 } Condition;
 
+typedef enum { AND_MODE, OR_MODE } CondMode;
 // struct of select
 typedef struct {
   int is_subquery;
@@ -114,6 +115,7 @@ typedef struct {
   char *relations[MAX_NUM];       // relations in From clause
   size_t join_cond_num;           // Length of join conditions in Fro clause
   Condition join_conds[MAX_NUM];  // join conditions in Fro clause
+  CondMode condition_mode;        // mode of filter stmt, only support all `or` & `and`
   size_t condition_num;           // Length of conditions in Where clause
   Condition conditions[MAX_NUM];  // conditions in Where clause
   size_t order_num;               // Length of attrs in Order By clause

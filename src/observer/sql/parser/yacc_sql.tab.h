@@ -82,43 +82,44 @@ extern int yydebug;
     FROM = 288,
     WHERE = 289,
     AND = 290,
-    SET = 291,
-    ON = 292,
-    LOAD = 293,
-    DATA = 294,
-    INFILE = 295,
-    EQ = 296,
-    LT = 297,
-    GT = 298,
-    LE = 299,
-    GE = 300,
-    NE = 301,
-    LIKE_TOKEN = 302,
-    NOT_TOKEN = 303,
-    HAVING = 304,
-    GROUP = 305,
-    ORDER = 306,
-    BY = 307,
-    INNER = 308,
-    JOIN = 309,
-    ASC = 310,
-    NULLABLE = 311,
-    NULL_ = 312,
-    IS = 313,
-    IN_TOKEN = 314,
-    EXISTS_TOKEN = 315,
-    NUMBER = 316,
-    FLOAT = 317,
-    ID = 318,
-    PATH = 319,
-    SSS = 320,
-    STAR = 321,
-    STRING_V = 322,
-    MIN_AGGR = 323,
-    MAX_AGGR = 324,
-    COUNT_AGGR = 325,
-    SUM_AGGR = 326,
-    AVG_AGGR = 327
+    OR = 291,
+    SET = 292,
+    ON = 293,
+    LOAD = 294,
+    DATA = 295,
+    INFILE = 296,
+    EQ = 297,
+    LT = 298,
+    GT = 299,
+    LE = 300,
+    GE = 301,
+    NE = 302,
+    LIKE_TOKEN = 303,
+    NOT_TOKEN = 304,
+    HAVING = 305,
+    GROUP = 306,
+    ORDER = 307,
+    BY = 308,
+    INNER = 309,
+    JOIN = 310,
+    ASC = 311,
+    NULLABLE = 312,
+    NULL_ = 313,
+    IS = 314,
+    IN_TOKEN = 315,
+    EXISTS_TOKEN = 316,
+    NUMBER = 317,
+    FLOAT = 318,
+    ID = 319,
+    PATH = 320,
+    SSS = 321,
+    STAR = 322,
+    STRING_V = 323,
+    MIN_AGGR = 324,
+    MAX_AGGR = 325,
+    COUNT_AGGR = 326,
+    SUM_AGGR = 327,
+    AVG_AGGR = 328
   };
 #endif
 
@@ -126,7 +127,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 185 "yacc_sql.y"
+#line 186 "yacc_sql.y"
 
   struct _Attr *attr;
   struct _Condition *condition1;
@@ -137,7 +138,7 @@ union YYSTYPE
   char *position;
   Query*query;
 
-#line 141 "yacc_sql.tab.h"
+#line 142 "yacc_sql.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

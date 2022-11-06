@@ -201,13 +201,14 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
 }
 
 // 将conditions中可以下推的谓语下推到scan_operator上
-RC FilterStmt::push_down_predicates(Db *db, Table *table, std::unordered_map<std::string, Table *> *tables,
-    const Condition *conditions, int condition_num, FilterStmt *&stmt, common::Bitmap &bitmap)
+RC FilterStmt::create_push_down_filters(Db *db, Table *table, std::unordered_map<std::string, Table *> *tables,
+    const Condition *conditions, int condition_num, FilterStmt *&stmt, common::Bitmap &bitmap, CondMode mode)
 {
   RC rc = RC::SUCCESS;
   stmt = nullptr;
 
   FilterStmt *tmp_stmt = new FilterStmt();
+  tmp_stmt->set_filter_mode(mode);
   for (int i = 0; i < condition_num; i++) {
     FilterUnit *filter_unit = nullptr;
     // 子查询不进行下推
