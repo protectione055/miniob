@@ -20,6 +20,13 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/stmt.h"
 #include "storage/common/field.h"
 #include "sql/expr/expression.h"
+#include "sql/stmt/filter_stmt.h"
+#include "sql/stmt/having_stmt.h"
+#include "common/log/log.h"
+#include "common/lang/string.h"
+#include "storage/common/db.h"
+#include "storage/common/table.h"
+#include "common/lang/bitmap.h"
 
 #define MAX_NUM 20
 
@@ -27,6 +34,15 @@ class FieldMeta;
 class FilterStmt;
 class Db;
 class Table;
+
+const char *const aggr_name[] = {
+    "NOT_AGGR",
+    "MIN",
+    "MAX",
+    "SUM",
+    "COUNT",
+    "AVG",
+};
 
 class SelectStmt : public Stmt
 {
@@ -43,25 +59,82 @@ public:
   const std::vector<Table *> &tables() const { return tables_; }
   const std::vector<Field> &query_fields() const { return query_fields_; }
   const std::vector<std::tuple<FieldExpr, int>> &order_fields() const { return order_fields_; }
-  FilterStmt *filter_stmts(int index) const { return filter_stmts_[index]; }
-  FilterStmt *join_stmt() const { return join_stmt_; }
-  FilterStmt *having_stmt() const
+
+  FilterStmt *filter_stmt() const
+  {
+    return filter_stmt_;
+  }
+
+  void set_filter_stmt(FilterStmt *filter_stmt)
+  {
+    filter_stmt_ = filter_stmt;
+  }
+
+  FilterStmt *push_down_filter_stmts(int index) const
+  {
+    if (push_down_filter_stmts_.size() == 0) {
+      return nullptr;
+    }
+    return push_down_filter_stmts_[index];
+  }
+
+  FilterStmt *join_keys() const
+  {
+    return join_keys_;
+  }
+
+  HavingStmt *having_stmt() const
   {
     return having_stmt_;
   }
-  std::vector<Field> &group_keys()
+
+  const std::vector<Field> &group_keys() const
   {
     return group_keys_;
   }
+
   const bool do_aggregate() const {return do_aggr_;}
 
 private:
   std::vector<Field> query_fields_;
   std::vector<std::tuple<FieldExpr, int>> order_fields_;
   std::vector<Table *> tables_;
-  std::vector<FilterStmt *>filter_stmts_;
-  FilterStmt *join_stmt_ = nullptr;
+  FilterStmt *filter_stmt_;
+  std::vector<FilterStmt *> push_down_filter_stmts_;
+  FilterStmt *join_keys_ = nullptr;
   bool do_aggr_ = false;
-  FilterStmt *having_stmt_ = nullptr;
+  HavingStmt *having_stmt_ = nullptr;
   std::vector<Field> group_keys_;
 };
+
+RC collect_rel_attr_into_query_fields(const RelAttr &relation_attr, Db *db, const Selects &select_sql,
+    std::vector<Table *> tables, std::unordered_map<std::string, Table *> table_map, size_t &attr_offset,
+    std::vector<Field> group_by_keys, std::vector<Field> &query_fields, bool visible = true);
+RC process_attr_with_star(const Selects &select_sql, const RelAttr &relation_attr, size_t &attr_offset,
+    const std::vector<Table *> &tables, std::vector<Field> &group_by_keys, std::vector<Field> &query_fields,
+    bool visible);
+RC process_attr_with_dot(const Selects &select_sql, const RelAttr &relation_attr, std::vector<Table *> &tables,
+    std::unordered_map<std::string, Table *> &table_map, const char *table_name, const char *field_name,
+    std::vector<Field> &group_by_keys, size_t &attr_offset, std::vector<Field> &query_fields, bool visible);
+RC process_simple_attr(const Selects &select_sql, const RelAttr &relation_attr, const std::vector<Table *> &tables,
+    std::vector<Field> &group_by_keys, size_t &attr_offset, std::vector<Field> &query_fields, bool visible);
+RC find_table_by_attr_name(const std::vector<Table *> &tables, Table *&table, const RelAttr &rel_attr);
+RC check_field_in_group(bool is_aggr, const FieldMeta *field_meta, const std::vector<Field> &group_by_keys);
+RC wildcard_fields(Table *table, std::vector<Field> &field_metas, bool is_aggr, std::vector<Field> &group_by_keys,
+    size_t &attr_offset);
+RC create_query_field(Table *table, const Selects &select_sql, const FieldMeta *field_meta,
+    const RelAttr &relation_attr, std::vector<Field> &group_by_keys, size_t &attr_offset,
+    std::vector<Field> &query_fields, bool visible);
+RC collect_tables_in_from_statement(Db *db, const Selects &select_sql, std::vector<Table *> &tables,
+    std::unordered_map<std::string, Table *> &table_map);
+RC collect_fields_in_orderby_stmt(Db *db, const Selects &select_sql, std::vector<Table *> &tables,
+    std::unordered_map<std::string, Table *> &table_map, std::vector<std::tuple<FieldExpr, int>> &order_fields);
+RC create_filter_for_where_stmt(Db *db, const Selects &select_sql, std::vector<Table *> &tables,
+    std::unordered_map<std::string, Table *> &table_map, FilterStmt *&reserved_filter_stmt,
+    std::vector<FilterStmt *> &push_down_filter_stmts);
+RC collect_groupby_keys(Db *db, const Selects &select_sql, std::vector<Table *> &tables,
+    std::unordered_map<std::string, Table *> &table_map, std::vector<Field> &group_by_keys);
+RC init_and_create_having_stmt(Db *db, const Selects &select_sql, const std::vector<Table *> &tables,
+    const std::unordered_map<std::string, Table *> &table_map, std::vector<Field> &group_by_keys,
+    std::vector<Field> &query_fields, size_t &attr_offset, HavingStmt *&having_stmt);
+bool find_rel_attr(const RelAttr *rel_attr_collection, RelAttr target_rel_attr, size_t collections_size);

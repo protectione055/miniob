@@ -14,6 +14,8 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/stmt/update_stmt.h"
 #include "sql/stmt/filter_stmt.h"
+#include "sql/stmt/select_stmt.h"
+#include "sql/planner/planner.h"
 #include "common/log/log.h"
 #include "common/lang/string.h"
 #include "storage/common/db.h"
@@ -54,9 +56,26 @@ RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
       return RC::SCHEMA_FIELD_NOT_EXIST;
     }
 
+    Value v;
+    // execute subquery and replace it with actual value
+    if (update.marks[i] == SUB_QUERY) {
+      Selects *select_sql = update.selects[i];
+      if (select_sql->attr_num > 1) {
+        LOG_WARN("too much columns in subquery");
+        return RC::MISMATCH;
+      }
+      RC rc = execute_subquery_get_value(db, select_sql, v);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("subquery execution failed");
+        return rc;
+      }
+    } else {
+      v = update.values[i];
+    }
+
     // check fields type
     AttrType field_type = field_meta->type();
-    Value v = update.values[i];
+
     if(v.type != NULLS && v.type != field_type) {
       if(try_typecast(&v, v, field_type) != RC::SUCCESS) {
         LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d", 
@@ -86,4 +105,46 @@ RC UpdateStmt::create(Db *db, const Updates &update, Stmt *&stmt)
   update_stmt->filter_stmt_ = filter_stmt;
   stmt = update_stmt;
   return RC::SUCCESS;
+}
+
+// 构造并执行子查询，检查是否只有一行一列，从Tuple获取Value
+RC UpdateStmt::execute_subquery_get_value(Db *db, Selects *select_sql, Value &value)
+{
+  RC rc = RC::SUCCESS;
+  Query query;
+  query.flag = SCF_SELECT;
+  query.sstr.selection = *select_sql;
+  Stmt *select_stmt = nullptr;
+  rc = Stmt::create_stmt(db, query, select_stmt);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to create SelectStmt for update sbuqery");
+    return rc;
+  }
+
+  Planner planner(select_stmt);
+  Operator *root = nullptr;
+  rc = planner.create_executor(root);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to create executor for update sbuqery");
+    return rc;
+  }
+  rc = root->open();
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to open executor for update sbuqery");
+    return rc;
+  }
+
+  TupleCell tuple_cell;
+  for (int tuple_count = 0; root->next() == RC::SUCCESS; tuple_count++) {
+    if (tuple_count > 0) {
+      LOG_WARN("more than one row was returneds in update subquery");
+      return RC::INVALID_ARGUMENT;
+    }
+    Tuple *tuple = root->current_tuple();
+    tuple->cell_at(0, tuple_cell);
+    value.type = tuple_cell.attr_type();
+    value.data = (void *)(tuple_cell.data());
+  }
+
+  return rc;
 }

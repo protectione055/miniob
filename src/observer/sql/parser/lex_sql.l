@@ -1,6 +1,7 @@
 %{
 #include<string.h>
 #include<stdio.h>
+#include "parse_defs.h"
 
 struct ParserContext;
 
@@ -84,13 +85,16 @@ QUOTE            [\'\"]
 [Cc][Oo][Uu][Nn][Tt]                                 RETURN_TOKEN(COUNT_AGGR);
 [Ss][Uu][Mm]                                         RETURN_TOKEN(SUM_AGGR);
 [Aa][Vv][Gg]                                         RETURN_TOKEN(AVG_AGGR);
-[Hh][Aa][Vv][Ii][Nn][Gg]							                             RETURN_TOKEN(HAVING);
+[Hh][Aa][Vv][Ii][Nn][Gg]							 RETURN_TOKEN(HAVING);
 [Gg][Rr][Oo][Uu][Pp]                                 RETURN_TOKEN(GROUP);
 [Jj][Oo][Ii][Nn]                                     RETURN_TOKEN(JOIN);
 [Ii][Nn][Nn][Ee][Rr]                                 RETURN_TOKEN(INNER);
 [Nn][Uu][Ll][Ll]                                     RETURN_TOKEN(NULL_);
 [Nn][Uu][Ll][Ll][Aa][Bb][Ll][Ee]                     RETURN_TOKEN(NULLABLE);
 [Ii][Ss]                                             RETURN_TOKEN(IS);
+[Ii][Nn]											 RETURN_TOKEN(IN_TOKEN);
+[Ee][Xx][Ii][Ss][Tt][Ss]							 RETURN_TOKEN(EXISTS_TOKEN);
+
 
 {ID}                                                 yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                                  RETURN_TOKEN(LBRACE);

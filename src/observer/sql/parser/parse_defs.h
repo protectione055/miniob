@@ -45,7 +45,9 @@ typedef struct {
   char *relation_name;   // relation name (may be NULL) 表名
   char *attribute_name;  // attribute name              属性名
   int   is_asc;          // is ascending order          是否升序
-} OrderAttr;             
+} OrderAttr;
+
+typedef enum { ATTR, VALUE, SUB_QUERY, VALUE_LIST, NO_EXPR } CondExprType;
 
 typedef enum {
   EQUAL_TO,     //"="     0
@@ -56,8 +58,12 @@ typedef enum {
   GREAT_THAN,   //">"     5
   LIKE,         //"like"  6
   NOT_LIKE,     //"not like"  7
+  IN,           //"in"    8
+  NOT_IN,       //"not in"    9
   IS_NULL,
   IS_NOT_NULL,
+  EXISTS,
+  NOT_EXISTS,
   NO_OP
 } CompOp;
 
@@ -78,19 +84,29 @@ typedef struct _Value {
 } Value;
 
 typedef struct _Condition {
-  int left_is_attr;    // TRUE if left-hand side is an attribute
-                       // 1时，操作符左边是属性名，0时，是属性值
-  Value left_value;    // left-hand side value if left_is_attr = FALSE
-  RelAttr left_attr;   // left-hand side attribute
-  CompOp comp;         // comparison operator
-  int right_is_attr;   // TRUE if right-hand side is an attribute
-                       // 1时，操作符右边是属性名，0时，是属性值
-  RelAttr right_attr;  // right-hand side attribute if right_is_attr = TRUE 右边的属性
-  Value right_value;   // right-hand side value if right_is_attr = FALSE
+  // int left_is_query;  // 1时，操作符左边是子查询
+  CondExprType left_expr_type;
+  void *left_query;
+  int left_is_attr;   // TRUE if left-hand side is an attribute
+                      // 1时，操作符左边是属性名，0时，是属性值
+  Value left_value;   // left-hand side value if left_is_attr = FALSE && left_is_query == FALSE
+  RelAttr left_attr;  // left-hand side attribute
+  CompOp comp;        // comparison operator
+                      //   int right_is_attr;   // TRUE if right-hand side is an attribute
+                      // 1时，操作符右边是属性名，0时，是属性值
+  CondExprType right_expr_type;
+  int right_is_attr;
+  RelAttr right_attr;  // right-hand side attribute if right_is_attr = TRUE
+  Value right_value;   // right-hand side value if right_is_attr = FALSE && right_is_query == FALSE
+                       //   int right_is_query;  // 1时，操作符右边是子查询
+  void *right_query;
+  size_t value_num;       // Length of values
+  Value values[MAX_NUM];  // List of values to check in IN/NOT_IN statements
 } Condition;
 
 // struct of select
 typedef struct {
+  int is_subquery;
   int is_aggr;                    // flag of select type, 1 if it will do aggregation
   size_t attr_num;                // Length of attrs in Select clause
   RelAttr attributes[MAX_NUM];    // attrs in Select clause
@@ -129,6 +145,8 @@ typedef struct {
   size_t attribute_num;           // Number of attributes to update
   char *attribute_names[MAX_NUM]; // Attribute to update
   Value values[MAX_NUM];          // update value
+  Selects *selects[MAX_NUM];      // 子查询语句
+  CondExprType marks[MAX_NUM];    // 标记该字段上是实值（VALUE）还是子查询（SUB_QUERY）
   size_t condition_num;           // Length of conditions in Where clause
   Condition conditions[MAX_NUM];  // conditions in Where clause
 } Updates;
@@ -239,6 +257,7 @@ void value_init_string(Value *value, const char *v);
 void value_init_date(Value *value, time_t v);
 void value_init_null(Value *value);
 void value_destroy(Value *value);
+void subquery_destroy(void **query);
 
 void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
     int right_is_attr, RelAttr *right_attr, Value *right_value);
@@ -253,6 +272,7 @@ void selects_append_relation(Selects *selects, const char *relation_name);
 void selects_append_joincond(Selects *selects, Condition condition);
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num);
 void selects_append_orders(Selects *selects, OrderAttr *order_attr);
+void subquery_create_value_list(Value dst[], Value src[], size_t value_num);
 void selects_destroy(Selects *selects);
 
 void inserts_init(Inserts *inserts, const char *relation_name);
@@ -265,6 +285,7 @@ void deletes_destroy(Deletes *deletes);
 
 void updates_init(Updates *updates, const char *relation_name, Condition conditions[], size_t condition_num);
 void updates_attr_init(Updates *updates, const char *attribute_name, Value *value);
+void updates_attr_init_with_subquery(Updates *updates, const char *attribute_name, Selects *select);
 void updates_destroy(Updates *updates);
 
 void create_table_append_attribute(CreateTable *create_table, AttrInfo *attr_info);
@@ -295,6 +316,16 @@ void query_init(Query *query);
 Query *query_create();  // create and init
 void query_reset(Query *query);
 void query_destroy(Query *query);  // reset and delete
+
+void selects_append_groupkey(Selects *selects, RelAttr *rel_attr);
+void selects_append_having_conditions(Selects *selects, Condition conditions[], size_t condition_num);
+
+void condition_init_with_subquery(Condition *condition, CompOp comp, CondExprType left_expr_type, RelAttr *left_attr,
+    Value *left_value, Selects *left_query, CondExprType right_expr_type, RelAttr *right_attr, Value *right_value,
+    Selects *right_query);
+
+void condition_init_with_value_list(Condition *condition, CompOp comp, CondExprType left_expr_type, RelAttr *left_attr,
+    Value *left_value, Value *value_list, size_t value_num);
 
 #ifdef __cplusplus
 }

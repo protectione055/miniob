@@ -92,35 +92,119 @@ void value_destroy(Value *value)
   value->data = nullptr;
 }
 
+void subquery_destroy(void **query)
+{
+  LOG_DEBUG("destroy subquery");
+  free((Selects *)*query);
+  *query = nullptr;
+}
+
 void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
     int right_is_attr, RelAttr *right_attr, Value *right_value)
 {
   condition->comp = comp;
   condition->left_is_attr = left_is_attr;
+  condition->right_is_attr = right_is_attr;
   if (left_is_attr) {
+    condition->left_expr_type = ATTR;
     condition->left_attr = *left_attr;
   } else {
+    condition->left_expr_type = VALUE;
     condition->left_value = *left_value;
   }
 
-  condition->right_is_attr = right_is_attr;
   if (right_is_attr) {
+    condition->right_expr_type = ATTR;
     condition->right_attr = *right_attr;
   } else {
+    condition->right_expr_type = VALUE;
     condition->right_value = *right_value;
   }
 }
+
+// ATTR/VALUE/SUB_QUERY
+void condition_init_with_subquery(Condition *condition, CompOp comp, CondExprType left_expr_type, RelAttr *left_attr,
+    Value *left_value, Selects *left_query, CondExprType right_expr_type, RelAttr *right_attr, Value *right_value,
+    Selects *right_query)
+{
+  condition->comp = comp;
+  condition->left_is_attr = 0;
+  condition->right_is_attr = 0;
+  condition->left_expr_type = left_expr_type;
+  condition->right_expr_type = right_expr_type;
+
+  switch (left_expr_type) {
+    case ATTR:
+      condition->left_is_attr = 1;
+      condition->left_attr = *left_attr;
+      break;
+    case VALUE:
+      condition->left_value = *left_value;
+      break;
+    case SUB_QUERY:
+      condition->left_query = (Selects *)malloc(sizeof(Selects));
+      memcpy(condition->left_query, left_query, sizeof(Selects));
+      break;
+  }
+
+  switch (right_expr_type) {
+    case ATTR:
+      condition->right_is_attr = 1;
+      condition->right_attr = *right_attr;
+      break;
+    case VALUE:
+      condition->right_value = *right_value;
+      break;
+    case SUB_QUERY:
+      condition->right_query = (Selects *)malloc(sizeof(Selects));
+      memcpy(condition->right_query, right_query, sizeof(Selects));
+      break;
+    case NO_EXPR:
+      break;
+  }
+}
+
+void condition_init_with_value_list(Condition *condition, CompOp comp, CondExprType left_expr_type, RelAttr *left_attr,
+    Value *left_value, Value *value_list, size_t value_num)
+{
+  condition->comp = comp;
+  condition->left_is_attr = 0;
+  condition->right_is_attr = 0;
+
+  condition->left_expr_type = left_expr_type;
+  switch (left_expr_type) {
+    case ATTR:
+      condition->left_is_attr = 1;
+      condition->left_attr = *left_attr;
+      break;
+    case VALUE:
+      condition->left_value = *left_value;
+      break;
+  }
+
+  condition->right_expr_type = VALUE_LIST;
+  condition->value_num = value_num;
+  for (size_t i = 0; i < value_num; i++) {
+    condition->values[i] = value_list[i];
+  }
+}
+
 void condition_destroy(Condition *condition)
 {
-  if (condition->left_is_attr) {
+  if (condition->left_expr_type == ATTR) {
     relation_attr_destroy(&condition->left_attr);
-  } else {
+  } else if (condition->left_expr_type == VALUE){
     value_destroy(&condition->left_value);
-  }
-  if (condition->right_is_attr) {
-    relation_attr_destroy(&condition->right_attr);
   } else {
+    subquery_destroy(&condition->left_query);
+  }
+
+  if (condition->right_expr_type == ATTR) {
+    relation_attr_destroy(&condition->right_attr);
+  } else if (condition->right_expr_type == VALUE) {
     value_destroy(&condition->right_value);
+  } else {
+    subquery_destroy(&condition->right_query);
   }
 }
 
@@ -180,6 +264,12 @@ void selects_append_having_conditions(Selects *selects, Condition conditions[], 
 void selects_append_orders(Selects *selects, OrderAttr *order_attr)
 {
   selects->orders[selects->order_num++] = *order_attr;
+}
+void subquery_create_value_list(Value dst[], Value src[], size_t value_num)
+{
+  for (size_t i = 0; i < value_num; i++) {
+    dst[i] = src[i];
+  }
 }
 void selects_destroy(Selects *selects)
 {
@@ -271,7 +361,16 @@ void updates_init(Updates *updates, const char *relation_name, Condition conditi
 void updates_attr_init(Updates *updates, const char *attribute_name, Value *value)
 {
   updates->attribute_names[updates->attribute_num] = strdup(attribute_name);
+  updates->marks[updates->attribute_num] = VALUE;
   updates->values[updates->attribute_num] = *value;
+  updates->attribute_num++;
+}
+
+void updates_attr_init_with_subquery(Updates *updates, const char *attribute_name, Selects *selects)
+{
+  updates->attribute_names[updates->attribute_num] = strdup(attribute_name);
+  updates->marks[updates->attribute_num] = SUB_QUERY;
+  updates->selects[updates->attribute_num] = selects;
   updates->attribute_num++;
 }
 

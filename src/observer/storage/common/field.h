@@ -38,7 +38,13 @@ public:
     return field_->type();
   }
 
-  const char *table_name() const { return table_->name(); }
+  const char *table_name() const
+  {
+    if (!table_) {
+      return nullptr;
+    }
+    return table_->name();
+  }
   const char *field_name() const { return field_->name(); }
 
   void set_table(const Table *table)

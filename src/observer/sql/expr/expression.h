@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include <string.h>
 #include "storage/common/field.h"
 #include "sql/expr/tuple_cell.h"
+#include "sql/stmt/stmt.h"
 
 class Tuple;
 
@@ -24,6 +25,7 @@ enum class ExprType {
   NONE,
   FIELD,
   VALUE,
+  SUB_QUERY,
 };
 
 class Expression
@@ -70,9 +72,12 @@ public:
     return field_.field_name();
   }
 
+  void set_associated_value(TupleCell &cell);
+
   RC get_value(const Tuple &tuple, TupleCell &cell) const override;
 private:
   Field field_;
+  TupleCell associated_query_cell_;		//保存与外查询关联的值
 };
 
 class ValueExpr : public Expression

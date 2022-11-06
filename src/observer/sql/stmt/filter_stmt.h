@@ -20,6 +20,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/parser/parse_defs.h"
 #include "sql/stmt/stmt.h"
 #include "sql/expr/expression.h"
+#include "common/lang/bitmap.h"
 
 class Db;
 class Table;
@@ -57,6 +58,12 @@ public:
   {
     right_ = expr;
   }
+
+  bool have_subquery() const
+  {
+    return (left_ && left_->type() == ExprType::SUB_QUERY) || (right_ && right_->type() == ExprType::SUB_QUERY);
+  }
+
   Expression *left() const
   {
     return left_;
@@ -119,19 +126,18 @@ public:
 
 public:
   static RC create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-			const Condition *conditions, int condition_num,
-			FilterStmt *&stmt);
+      const Condition *conditions, int condition_num, FilterStmt *&stmt, bool is_subquery = false);
 
   static RC create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-			       const Condition &condition, FilterUnit *&filter_unit);
+      const Condition &condition, FilterUnit *&filter_unit, bool is_subquery = false);
 
-  static RC create_by_table(Db *db, Table *table, std::unordered_map<std::string, Table *> *tables,
-			const Condition *conditions, int condition_num,
-			FilterStmt *&stmt);
+  static RC push_down_predicates(Db *db, Table *table, std::unordered_map<std::string, Table *> *tables,
+      const Condition *conditions, int condition_num, FilterStmt *&stmt, common::Bitmap &bitmap);
 
   static RC create_table_filter_unit(Db *db, Table *table, std::unordered_map<std::string, Table *> *tables,
-			       const Condition &condition, FilterUnit *&filter_unit);
+      const Condition &condition, FilterUnit *&filter_unit);
 
 private:
-  std::vector<FilterUnit *>  filter_units_; // 默认当前都是AND关系
+  std::vector<FilterUnit *> filter_units_;  // 默认当前都是AND关系
 };
+

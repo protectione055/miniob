@@ -12,7 +12,7 @@ See the Mulan PSL v2 for more details. */
 // Created by Meiyi & Longda on 2021/4/13.
 //
 
-#include <string>
+#include <queue>
 #include <sstream>
 
 #include "execute_stage.h"
@@ -36,6 +36,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/project_operator.h"
 #include "sql/operator/hash_aggregate_operator.h"
 #include "sql/operator/join_operator.h"
+#include "sql/planner/planner.h"
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/select_stmt.h"
 #include "sql/stmt/update_stmt.h"
@@ -288,6 +289,9 @@ IndexScanOperator *try_to_create_index_scan_operator(FilterStmt *filter_stmt)
   for (const FilterUnit *filter_unit : filter_units) {
     Expression *left = filter_unit->left();
     Expression *right = filter_unit->right();
+    if (!left || !right) {
+      return nullptr;
+    }
     if(left->type() == ExprType::VALUE && right->type() == ExprType::FIELD) {
       std::swap(left, right);
     }
@@ -459,60 +463,34 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
   SessionEvent *session_event = sql_event->session_event();
   RC rc = RC::SUCCESS;
 
-
-  std::unordered_map<std::string, Operator*> table_operator_map;
-  if (select_stmt->tables().empty()) {
-    LOG_WARN("invalid argument. size of tables = 0");
-    return RC::INVALID_ARGUMENT;
-  }
-  for(int i=0; i<select_stmt->tables().size(); i++){
-    FilterStmt *filter_stmt = select_stmt->filter_stmts(i);
-    Table *table = select_stmt->tables()[i];
-    Operator *scan_oper = try_to_create_index_scan_operator(filter_stmt);
-    if (nullptr == scan_oper) {
-      scan_oper = new TableScanOperator(table);
-    }  
-    PredicateOperator *pred_oper = new PredicateOperator(filter_stmt);
-    pred_oper->add_child(scan_oper);
-    table_operator_map[table->table_meta().name()] = pred_oper;
+  // 创建执行计划
+  Planner planner(select_stmt);
+  Operator *root;
+  rc = planner.create_executor(root);
+  if(rc != RC::SUCCESS) {
+	LOG_ERROR("failed to create execute plan");
+    session_event->set_response("FAILURE\n");
+    return rc;
   }
 
-  Operator *join_oper = JoinOperator::create_join_tree(table_operator_map, select_stmt->join_stmt());
-  DEFER([&] () {delete join_oper;});
-
-  HashAggregateOperator aggregate_oper(
-      select_stmt->query_fields(), select_stmt->group_keys(), select_stmt->having_stmt());
-  OrderOperator order_oper = OrderOperator(select_stmt->order_fields());
-  if (select_stmt->do_aggregate()) {
-    aggregate_oper.add_child(join_oper);
-    order_oper.add_child(&aggregate_oper);
-  } else {
-    order_oper.add_child(join_oper);
-  }
-
-  ProjectOperator project_oper;
-  project_oper.add_child(&order_oper);
-
-  // 初始化project_operator
-  bool multi_table = false;
-  if (select_stmt->tables().size() > 1) multi_table = true;
-  for (const Field &field : select_stmt->query_fields()) {
-    project_oper.add_projection(field.table(), field.meta(), multi_table);
-  }
-  rc = project_oper.open();
+  ProjectOperator *project_oper = (ProjectOperator *)root;
+  
+  rc = project_oper->open();
   if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to open operator");
+    LOG_ERROR("failed to open execute plan");
     session_event->set_response("FAILURE\n");
     return rc;
   }
 
   // 开始执行
   std::stringstream ss;
-  print_tuple_header(ss, project_oper);
-  while ((rc = project_oper.next()) == RC::SUCCESS) {
+  print_tuple_header(ss, *project_oper);
+  while ((rc = project_oper->next()) == RC::SUCCESS) {
+    
     // get current record
     // write to response
-    Tuple * tuple = project_oper.current_tuple();
+    Tuple * tuple = project_oper->current_tuple();
+    
     if (nullptr == tuple) {
       rc = RC::INTERNAL;
       LOG_WARN("failed to get current record. rc=%s", strrc(rc));
@@ -525,12 +503,16 @@ RC ExecuteStage::do_select(SQLStageEvent *sql_event)
 
   if (rc != RC::RECORD_EOF) {
     LOG_WARN("something wrong while iterate operator. rc=%s", strrc(rc));
-    session_event->set_response("FAILED\n");
-    project_oper.close();
+    session_event->set_response("FAILURE\n");
+    project_oper->close();
   } else {
-    rc = project_oper.close();
+    
+    rc = project_oper->close();
     session_event->set_response(ss.str());
   }
+  
+  planner.destroy_executor(root);
+  
   return rc;
 }
 
