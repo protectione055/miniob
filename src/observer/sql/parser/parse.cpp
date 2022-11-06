@@ -38,8 +38,10 @@ void relation_attr_destroy(RelAttr *relation_attr)
 {
   free(relation_attr->relation_name);
   free(relation_attr->attribute_name);
+  free(relation_attr->alias);
   relation_attr->relation_name = nullptr;
   relation_attr->attribute_name = nullptr;
+  relation_attr->alias = nullptr;
 }
 void order_attr_init(OrderAttr *order_attr, const char *relation_name, const char *attribute_name, const int is_asc)
 {
@@ -285,8 +287,10 @@ void selects_destroy(Selects *selects)
   selects->attr_num = 0;
 
   for (size_t i = 0; i < selects->relation_num; i++) {
-    free(selects->relations[i]);
-    selects->relations[i] = NULL;
+    free(selects->relations[i].relation_name);
+    free(selects->relations[i].alias);
+    selects->relations[i].relation_name = NULL;
+    selects->relations[i].alias = NULL;
   }
   selects->relation_num = 0;
 

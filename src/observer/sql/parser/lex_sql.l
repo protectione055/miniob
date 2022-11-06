@@ -95,6 +95,8 @@ QUOTE            [\'\"]
 [Ii][Ss]                                             RETURN_TOKEN(IS);
 [Ii][Nn]											 RETURN_TOKEN(IN_TOKEN);
 [Ee][Xx][Ii][Ss][Tt][Ss]							 RETURN_TOKEN(EXISTS_TOKEN);
+[Aa][Ss]                                             RETURN_TOKEN(AS);
+
 
 
 {ID}                                                 yylval->string=strdup(yytext); RETURN_TOKEN(ID);
