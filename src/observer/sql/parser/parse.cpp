@@ -22,7 +22,7 @@ RC parse(char *st, Query *sqln);
 #ifdef __cplusplus
 extern "C" {
 #endif  // __cplusplus
-void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const char *attribute_name)
+void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const char *attribute_name, const char *alias)
 {
   if (relation_name != nullptr) {
     relation_attr->relation_name = strdup(relation_name);
@@ -32,6 +32,7 @@ void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const
   relation_attr->aggr_type = NOT_AGGR;
   relation_attr->is_complex = 0;
   relation_attr->attribute_name = strdup(attribute_name);
+  relation_attr->alias = strdup(alias);
 }
 void relation_attr_destroy(RelAttr *relation_attr)
 {
@@ -233,9 +234,9 @@ void selects_append_attribute(Selects *selects, RelAttr *rel_attr)
 {
   selects->attributes[selects->attr_num++] = *rel_attr;
 }
-void selects_append_relation(Selects *selects, const char *relation_name)
+void selects_append_relation(Selects *selects, const char *relation_name,  const char *alias)
 {
-  selects->relations[selects->relation_num++] = strdup(relation_name);
+  selects->relations[selects->relation_num++] = Relation{strdup(relation_name), strdup(alias)};
 }
 void selects_append_joincond(Selects *selects, Condition condition)
 {
