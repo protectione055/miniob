@@ -156,6 +156,7 @@ ParserContext *get_context(yyscan_t scanner)
         FROM
         WHERE
         AND
+		OR
         SET
         ON
         LOAD
@@ -709,7 +710,10 @@ where:
 condition_list:
     /* empty */
     | AND condition condition_list {
-				// CONTEXT->conditions[CONTEXT->condition_length++]=*$2;
+				CONTEXT->ssql->sstr.selection.condition_mode = AND_MODE;
+			}
+	| OR condition condition_list {
+				CONTEXT->ssql->sstr.selection.condition_mode = OR_MODE;
 			}
     ;
 condition:

@@ -85,7 +85,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
 
   // 创建join相关conds列表
   FilterStmt *join_keys = nullptr;
-  rc = FilterStmt::create(db, nullptr, &table_map, select_sql.join_conds, select_sql.join_cond_num, join_keys);
+  rc = FilterStmt::create(
+      db, nullptr, &table_map, select_sql.join_conds, select_sql.join_cond_num, join_keys, select_sql.is_subquery);
   if (rc != RC::SUCCESS) {
     LOG_WARN("cannot construct join filter stmt");
     return rc;
@@ -93,7 +94,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
 
   // create filter statement in `having` statement
   HavingStmt *having_stmt = nullptr;
-  if (select_sql.is_aggr) {
+  if (select_sql.is_aggr && select_sql.having_condition_num > 0) {
     rc = init_and_create_having_stmt(
         db, select_sql, tables, table_map, group_by_keys, query_fields, attr_offset, having_stmt);
     if (rc != RC::SUCCESS) {
@@ -438,13 +439,20 @@ RC create_filter_for_where_stmt(Db *db, const Selects &select_sql, std::vector<T
       LOG_WARN("cannot construct filter stmt");
       return rc;
     }
+    reserved_filter_stmt->set_filter_mode(select_sql.condition_mode);
   } else {  //分开每个table对应的filter，两边都是常数的filter存放在所有table中
     FilterStmt *filter_stmt;
     char *space = new char[select_sql.condition_num]();
     common::Bitmap bitmap(space, select_sql.condition_num);
     for (size_t i = 0; i < select_sql.relation_num; i++) {
-      rc = FilterStmt::push_down_predicates(
-          db, tables[i], &table_map, select_sql.conditions, select_sql.condition_num, filter_stmt, bitmap);
+      rc = FilterStmt::create_push_down_filters(db,
+          tables[i],
+          &table_map,
+          select_sql.conditions,
+          select_sql.condition_num,
+          filter_stmt,
+          bitmap,
+          select_sql.condition_mode);
       if (rc != RC::SUCCESS) {
         LOG_WARN("cannot construct filter stmt");
         return rc;
@@ -472,6 +480,7 @@ RC create_filter_for_where_stmt(Db *db, const Selects &select_sql, std::vector<T
         LOG_WARN("cannot construct filter stmt");
         return rc;
       }
+      reserved_filter_stmt->set_filter_mode(select_sql.condition_mode);
     }
     delete[] space;
   }
@@ -506,14 +515,14 @@ RC collect_groupby_keys(Db *db, const Selects &select_sql, std::vector<Table *> 
   return rc;
 }
 
-// TODO: 从having_condition中取出所有字段，聚合时合并到query_fields中
+// 从having_condition中取出所有字段，聚合时合并到query_fields中
 RC init_and_create_having_stmt(Db *db, const Selects &select_sql, const std::vector<Table *> &tables,
     const std::unordered_map<std::string, Table *> &table_map, std::vector<Field> &group_by_keys,
     std::vector<Field> &query_fields, size_t &attr_offset, HavingStmt *&having_stmt)
 {
   // fields in having clause will be marked as invisible, projection operator will ignore invisible fields
   RC rc = RC::SUCCESS;
-  if (!select_sql.is_aggr) {
+  if (!select_sql.is_aggr || select_sql.having_condition_num == 0) {
     having_stmt = nullptr;
     return RC::SUCCESS;
   }
