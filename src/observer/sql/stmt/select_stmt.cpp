@@ -136,11 +136,13 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   SelectStmt *select_stmt = new SelectStmt();
   select_stmt->tables_.swap(tables);
   select_stmt->query_fields_.swap(query_fields);
+  select_stmt->query_exprs_.swap(query_exprs);
   select_stmt->order_fields_.swap(order_fields);
   select_stmt->filter_stmt_ = reserved_filter_stmt;
   select_stmt->push_down_filter_stmts_.swap(push_down_filter_stmts);
   select_stmt->join_keys_ = join_keys;
   select_stmt->do_aggr_ = select_sql.is_aggr;  // 告知执行器生成aggregate_operator
+  if (!expr_aggr.empty()) select_stmt->do_aggr_ = true;
   select_stmt->having_stmt_ = having_stmt;
   select_stmt->group_keys_.swap(group_by_keys);
   select_stmt->expr_stmt_ = expr_stmt;
