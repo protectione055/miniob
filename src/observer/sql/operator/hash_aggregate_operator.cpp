@@ -63,7 +63,7 @@ RC HashAggregateOperator::open()
       const char *child_data;
 
       if (field.table() != nullptr) {
-        child_tuple->find_cell(Field(field.table(), subfield_meta), child_cell);
+        child_tuple->find_cell(Field(field.table(), subfield_meta, ""), child_cell);
         child_data = child_cell.data();
       }
 

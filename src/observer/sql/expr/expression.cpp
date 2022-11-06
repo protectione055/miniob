@@ -149,7 +149,8 @@ void get_ComplexExpr(std::vector<Expression *> &expr_stack, std::vector<char> &o
   expr_stack.push_back(res);
 }
 
-Expression *ComplexExpr::create_complex_expr(const char* expr_str, std::unordered_map<std::string, Table *> &table_map, Table *table, std::vector<Field> &expr_aggr, size_t &attr_offset)
+Expression *ComplexExpr::create_complex_expr(const char *expr_str, std::unordered_map<std::string, Table *> &table_map,
+    Table *table, std::vector<Field> &expr_aggr, size_t &attr_offset)
 {
   std::vector<Expression *> expr_stack;
   std::vector<char> op_stack;
@@ -235,7 +236,7 @@ Expression *ComplexExpr::create_complex_expr(const char* expr_str, std::unordere
         }
 
         aggr_field_meta->init(aggr_name, attr_type, attr_offset, attr_len, false, field_meta->nullable());
-        expr_aggr.push_back(Field(table, aggr_field_meta, aggr_type, field_meta));
+        expr_aggr.push_back(Field(table, aggr_field_meta, aggr_type, field_meta,""));
         expr_stack.push_back(new FieldExpr(table, aggr_field_meta));
 
         delete[] aggr;

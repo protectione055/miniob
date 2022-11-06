@@ -45,7 +45,13 @@ RC Planner::create_select_plan(SelectStmt *select_stmt, Operator *&root)
       Operator *scan_oper = try_to_get_scan_operator(table, push_down_filter_stmt);
       PredicateOperator *push_down_pred_oper = new PredicateOperator(push_down_filter_stmt);
       push_down_pred_oper->add_child(scan_oper);
-      table_operator_map[table->table_meta().name()] = push_down_pred_oper;
+
+      std::string table_alias = select_stmt->table_alias(table->name());
+      if (table_alias == "") {
+        table_operator_map[table->table_meta().name()] = push_down_pred_oper;
+      } else {
+        table_operator_map[table_alias] = push_down_pred_oper;
+      }
     }
     Operator *join_oper = JoinOperator::create_join_tree(table_operator_map, select_stmt->join_keys());
     top_pred_oper->add_child(join_oper);
@@ -80,7 +86,13 @@ RC Planner::create_select_plan(SelectStmt *select_stmt, Operator *&root)
     const Field &field = select_stmt->query_fields()[i];
     Expression *expr = select_stmt->query_exprs()[i];
     if (field.meta()->visible()) {
-      project_oper->add_projection(field.table(), field.meta(), expr, multi_table);
+      const Table *table = field.table();
+      if (table) {
+        project_oper->add_projection(
+            table, field.meta(), expr, multi_table, select_stmt->table_alias(table->name()).c_str(), field.alias());
+      } else {
+        project_oper->add_projection(field.table(), field.meta(), expr, multi_table, "", field.alias());
+      }
     }
   }
 

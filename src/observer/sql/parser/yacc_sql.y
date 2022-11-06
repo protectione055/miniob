@@ -182,6 +182,7 @@ ParserContext *get_context(yyscan_t scanner)
 		IS
 		IN_TOKEN
 		EXISTS_TOKEN
+		AS
 
 %union {
   struct _Attr *attr;

@@ -134,12 +134,8 @@ public:
     return ExprType::COMPLEX;
   }
 
-  static Expression *create_complex_expr(
-    const char* expr_str, 
-    std::unordered_map<std::string, Table *> &table_map, 
-    Table *default_table,
-    std::vector<Field> &expr_aggr,
-    size_t &attr_offset);
+  static Expression *create_complex_expr(const char *expr_str, std::unordered_map<std::string, Table *> &table_map,
+      Table *default_table, std::vector<Field> &expr_aggr, size_t &attr_offset);
 
   RC get_value(const Tuple &tuple, TupleCell &cell) const override;
 

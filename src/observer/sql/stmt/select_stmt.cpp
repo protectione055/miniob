@@ -36,7 +36,8 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   // collect tables in `from` statement
   std::vector<Table *> tables;
   std::unordered_map<std::string, Table *> table_map;
-  rc = collect_tables_in_from_statement(db, select_sql, tables, table_map);
+  std::map<std::string, std::string> table_name_alias_map;  //表的别名与原名的映射
+  rc = collect_tables_in_from_statement(db, select_sql, tables, table_map, table_name_alias_map);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to collect tables in from statement");
     return rc;
@@ -74,7 +75,6 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     if (field_meta->is_expr()){
       Expression *expr = nullptr;
       expr = ComplexExpr::create_complex_expr(field_meta->name(), table_map, tables[0], expr_aggr, attr_offset);
-
       query_exprs.push_back(expr);
     } else {
       query_exprs.push_back(new FieldExpr(table, field_meta));
@@ -146,6 +146,7 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   select_stmt->having_stmt_ = having_stmt;
   select_stmt->group_keys_.swap(group_by_keys);
   select_stmt->expr_stmt_ = expr_stmt;
+  select_stmt->table_name_alias_map_ = table_name_alias_map;
   stmt = select_stmt;
   return RC::SUCCESS;
 }
@@ -175,7 +176,7 @@ RC collect_rel_attr_into_query_fields(const RelAttr &relation_attr, Db *db, cons
       FieldMeta *field_meta = new FieldMeta;
       field_meta->init(relation_attr.attribute_name, FLOATS, attr_offset, sizeof(float), true, /* nullable */false);
       field_meta->set_expr();
-      query_fields.push_back(Field(nullptr, field_meta, NOT_AGGR, nullptr));
+      query_fields.push_back(Field(nullptr, field_meta, NOT_AGGR, nullptr, relation_attr.alias));
     } else {
     rc = process_simple_attr(select_sql, relation_attr, tables, group_by_keys, attr_offset, query_fields, visible);
   }
@@ -200,12 +201,12 @@ RC process_attr_with_star(const Selects &select_sql, const RelAttr &relation_att
     size_t attr_len = sizeof(int);
     FieldMeta *field_meta = new FieldMeta;
     field_meta->init("COUNT(*)", INTS, attr_offset, attr_len, visible, /* nullable */ false);
-    query_fields.push_back(Field(nullptr, field_meta, relation_attr.aggr_type, nullptr));
+    query_fields.push_back(Field(nullptr, field_meta, relation_attr.aggr_type, nullptr, relation_attr.alias));
     attr_offset += attr_len;
   } else {
     for (Table *table : tables) {
       // select * from t;
-      rc = wildcard_fields(table, query_fields, select_sql.is_aggr, group_by_keys, attr_offset);
+      rc = wildcard_fields(table, query_fields, select_sql.is_aggr, group_by_keys, attr_offset, relation_attr.alias);
       if (rc != RC::SUCCESS) {
         LOG_WARN("invalid field name while field is *.");
         return rc;
@@ -226,7 +227,7 @@ RC process_attr_with_dot(const Selects &select_sql, const RelAttr &relation_attr
       return RC::SCHEMA_FIELD_MISSING;
     }
     for (Table *table : tables) {
-      wildcard_fields(table, query_fields, false, group_by_keys, attr_offset);
+      wildcard_fields(table, query_fields, false, group_by_keys, attr_offset, relation_attr.alias);
     }
   } else {
     auto iter = table_map.find(table_name);
@@ -238,7 +239,7 @@ RC process_attr_with_dot(const Selects &select_sql, const RelAttr &relation_attr
     Table *table = iter->second;
     if (0 == strcmp(field_name, "*")) {
       // select t.* from t;
-      wildcard_fields(table, query_fields, select_sql.is_aggr, group_by_keys, attr_offset);
+      wildcard_fields(table, query_fields, select_sql.is_aggr, group_by_keys, attr_offset, relation_attr.alias);
     } else {
       // select t.a from t;
       const FieldMeta *field_meta = table->table_meta().field(field_name);
@@ -312,14 +313,15 @@ RC check_field_in_group(bool is_aggr, const FieldMeta *field_meta, const std::ve
   return RC::SCHEMA_FIELD_NAME_ILLEGAL;
 }
 
-RC wildcard_fields(
-    Table *table, std::vector<Field> &field_metas, bool is_aggr, std::vector<Field> &group_by_keys, size_t &attr_offset)
+RC wildcard_fields(Table *table, std::vector<Field> &field_metas, bool is_aggr, std::vector<Field> &group_by_keys,
+    size_t &attr_offset, const char *alias)
 {
   const TableMeta &table_meta = table->table_meta();
   const int field_num = table_meta.field_num();
   for (int i = table_meta.sys_field_num(); i < field_num; i++) {
     const FieldMeta *cur_fieldmeta = table_meta.field(i);
     if (is_aggr) {
+      //为count(*)创建Field
       if (!check_field_in_group(is_aggr, table_meta.field(i), group_by_keys)) {
         return RC::SCHEMA_FIELD_NAME_ILLEGAL;
       }
@@ -330,10 +332,10 @@ RC wildcard_fields(
           cur_fieldmeta->len(),
           true,
           cur_fieldmeta->nullable());
-      field_metas.push_back(Field(table, new_fieldmeta, NOT_AGGR, cur_fieldmeta));
+      field_metas.push_back(Field(table, new_fieldmeta, NOT_AGGR, cur_fieldmeta, alias));
       attr_offset += table_meta.field(i)->len();
     } else {
-      field_metas.push_back(Field(table, table_meta.field(i)));
+      field_metas.push_back(Field(table, table_meta.field(i), ""));
     }
   }
   return RC::SUCCESS;
@@ -382,23 +384,28 @@ RC create_query_field(Table *table, const Selects &select_sql, const FieldMeta *
     if (relation_attr.aggr_type != NOT_AGGR) {
       aggr_field_meta->dirty_hack_set_namefunc(aggr_name[relation_attr.aggr_type]);
     }
-    query_fields.push_back(Field(table, aggr_field_meta, relation_attr.aggr_type, field_meta));
+    query_fields.push_back(Field(table, aggr_field_meta, relation_attr.aggr_type, field_meta, relation_attr.alias));
     attr_offset += attr_len;
   } else {
     // select a from t;
-    query_fields.push_back(Field(table, field_meta));
+    query_fields.push_back(Field(table, field_meta, relation_attr.alias));
   }
   return rc;
 }
 
 RC collect_tables_in_from_statement(Db *db, const Selects &select_sql, std::vector<Table *> &tables,
-    std::unordered_map<std::string, Table *> &table_map)
+    std::unordered_map<std::string, Table *> &table_map, std::map<std::string, std::string> &alias_map)
 {
   // 保证表的顺序与解析时一样
   for (int i = select_sql.relation_num - 1; i >= 0; i--) {
-    const char *table_name = select_sql.relations[i];
+    const char *table_name = select_sql.relations[i].relation_name;
+    const char *alias = select_sql.relations[i].alias;
     if (nullptr == table_name) {
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
+      return RC::INVALID_ARGUMENT;
+    }
+    if (alias && alias_map.find(alias) != alias_map.end()) {
+      LOG_WARN("duplicated alias name");
       return RC::INVALID_ARGUMENT;
     }
 
@@ -410,6 +417,9 @@ RC collect_tables_in_from_statement(Db *db, const Selects &select_sql, std::vect
 
     tables.push_back(table);
     table_map.insert(std::pair<std::string, Table *>(table_name, table));
+    if (alias) {
+      alias_map.insert(std::pair<std::string, std::string>(table_name, alias));
+    }
   }
   return RC::SUCCESS;
 }
@@ -546,7 +556,7 @@ RC collect_groupby_keys(Db *db, const Selects &select_sql, std::vector<Table *> 
         LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), group_by_attr.attribute_name);
         return RC::SCHEMA_FIELD_MISSING;
       }
-      group_by_keys.push_back(Field(table, field_meta, NOT_AGGR, nullptr));
+      group_by_keys.push_back(Field(table, field_meta, ""));
     }
   }
   return rc;
@@ -613,6 +623,11 @@ bool find_rel_attr(const RelAttr *rel_attr_collection, RelAttr target_rel_attr, 
       continue;
     }
     if (strcmp(rel_attr_collection[i].attribute_name, target_rel_attr.attribute_name) != 0) {
+      continue;
+    }
+    const char *cur_alias = rel_attr_collection[i].alias;
+    const char *target_alias = target_rel_attr.alias;
+    if ((cur_alias || target_alias) && strcmp(cur_alias, target_alias) != 0) {
       continue;
     }
     // Now that rel_attr_colletion[i] and target_rel_attr have the same attribute_name, they must have the same table

@@ -97,6 +97,15 @@ public:
 
   const bool do_aggregate() const {return do_aggr_;}
 
+  const std::string table_alias(const std::string table_name) const
+  {
+    auto iter = table_name_alias_map_.find(table_name);
+    if (iter == table_name_alias_map_.end()) {
+      return "";
+    }
+    return iter->second;
+  }
+
 private:
   std::vector<Field> query_fields_;
   std::vector<Expression *> query_exprs_;
@@ -109,6 +118,7 @@ private:
   HavingStmt *having_stmt_ = nullptr;
   FilterStmt *expr_stmt_ = nullptr;
   std::vector<Field> group_keys_;
+  std::map<std::string, std::string> table_name_alias_map_;
 };
 
 RC collect_rel_attr_into_query_fields(const RelAttr &relation_attr, Db *db, const Selects &select_sql,
@@ -125,7 +135,7 @@ RC process_simple_attr(const Selects &select_sql, const RelAttr &relation_attr, 
 RC find_table_by_attr_name(const std::vector<Table *> &tables, Table *&table, const RelAttr &rel_attr);
 RC check_field_in_group(bool is_aggr, const FieldMeta *field_meta, const std::vector<Field> &group_by_keys);
 RC wildcard_fields(Table *table, std::vector<Field> &field_metas, bool is_aggr, std::vector<Field> &group_by_keys,
-    size_t &attr_offset);
+    size_t &attr_offset, const char *alias);
 RC create_query_field(Table *table, const Selects &select_sql, const FieldMeta *field_meta,
     const RelAttr &relation_attr, std::vector<Field> &group_by_keys, size_t &attr_offset,
     std::vector<Field> &query_fields, bool visible);

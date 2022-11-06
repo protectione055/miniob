@@ -138,9 +138,11 @@ public:
     const char *field_name = field.field_name();
     for (size_t i = 0; i < speces_.size(); ++i) {
       const FieldExpr * field_expr = (const FieldExpr *)speces_[i]->expression();
-      const Field &field = field_expr->field();
-      if (0 == strcmp(field_name, field.field_name())) {
-	      return cell_at(i, cell);
+      const Field &this_field = field_expr->field();
+      if (0 == strcmp(field_name, this_field.field_name())) {
+        if (strcmp(field.alias(), this_field.alias()) == 0) {
+          return cell_at(i, cell);
+        }
       }
     }
     return RC::NOTFOUND;

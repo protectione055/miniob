@@ -21,10 +21,11 @@ class Field
 {
 public:
   Field() = default;
-  Field(const Table *table, const FieldMeta *field) : table_(table), field_(field)
+  Field(const Table *table, const FieldMeta *field, const char *alias) : table_(table), field_(field), alias_(alias)
   {}
-  Field(const Table *table, const FieldMeta *field, AggrType aggr_type, const FieldMeta *sub_fieldmeta)
-      : table_(table), field_(field), aggr_type_(aggr_type), sub_fieldmeta_(sub_fieldmeta)
+  Field(
+      const Table *table, const FieldMeta *field, AggrType aggr_type, const FieldMeta *sub_fieldmeta, const char *alias)
+      : table_(table), field_(field), aggr_type_(aggr_type), sub_fieldmeta_(sub_fieldmeta), alias_(alias)
   {}
 
   const Table *table() const { return table_; }
@@ -66,9 +67,18 @@ public:
     return sub_fieldmeta_;
   }
 
+  const char *alias() const
+  {
+    if (!alias_) {
+      return "";
+    }
+    return alias_;
+  }
+
 private:
   const Table *table_ = nullptr;
   const FieldMeta *field_ = nullptr;          // 进行count(id)这样的查询时，记录结果中count(id)字段本身的metadata
+  const char *alias_ = nullptr;               // 查询字段的别名
   const AggrType aggr_type_ = NOT_AGGR;       // 查询中该字段的聚合类型
   const FieldMeta *sub_fieldmeta_ = nullptr;  // 进行count(id)这样的查询时，记录id的metadata
 };
