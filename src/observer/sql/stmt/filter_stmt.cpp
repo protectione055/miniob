@@ -125,15 +125,21 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   Expression *right = nullptr;
   AttrType left_type, right_type;
   if (condition.left_expr_type == ATTR) {
-    Table *table = nullptr;
-    const FieldMeta *field = nullptr;
-    rc = get_table_and_field(db, default_table, tables, condition.left_attr, table, field, is_subquery);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("cannot find attr");
-      return rc;
+    if (!condition.left_attr.is_complex) {
+      Table *table = nullptr;
+      const FieldMeta *field = nullptr;
+      rc = get_table_and_field(db, default_table, tables, condition.left_attr, table, field, is_subquery);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("cannot find attr");
+        return rc;
+      }
+      left_type = field->type();
+      left = new FieldExpr(table, field);
+    } else {
+      std::vector<Field> expr_aggr; // shit
+      size_t attr_offset;
+      left = ComplexExpr::create_complex_expr(condition.left_attr.attribute_name, *tables, default_table, expr_aggr, attr_offset);
     }
-    left_type = field->type();
-    left = new FieldExpr(table, field);
   } else if (condition.left_expr_type == VALUE) {
     left_type = condition.left_value.type;
     left = new ValueExpr(condition.left_value);
@@ -155,16 +161,22 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   }
 
   if (condition.right_expr_type == ATTR) {
-    Table *table = nullptr;
-    const FieldMeta *field = nullptr;
-    rc = get_table_and_field(db, default_table, tables, condition.right_attr, table, field, is_subquery);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("cannot find attr");
-      delete left;
-      return rc;
+    if (!condition.right_attr.is_complex) {
+      Table *table = nullptr;
+      const FieldMeta *field = nullptr;
+      rc = get_table_and_field(db, default_table, tables, condition.right_attr, table, field, is_subquery);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("cannot find attr");
+        delete left;
+        return rc;
+      }
+      right_type = field->type();
+      right = new FieldExpr(table, field);
+    } else {
+      std::vector<Field> expr_aggr; // shit
+      size_t attr_offset;
+      right = ComplexExpr::create_complex_expr(condition.right_attr.attribute_name, *tables, default_table, expr_aggr, attr_offset);
     }
-    right_type = field->type();
-    right = new FieldExpr(table, field);
   } else if (condition.right_expr_type == VALUE) {
     right_type = condition.right_value.type;
     right = new ValueExpr(condition.right_value);

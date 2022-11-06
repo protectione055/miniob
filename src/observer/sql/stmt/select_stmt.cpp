@@ -64,6 +64,27 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
     }
   }
 
+  // create expression for projection
+  std::vector<Expression *> query_exprs;
+  std::vector<Field> expr_aggr;
+  for (Field field : query_fields) {
+    const Table *table = field.table();
+    const FieldMeta *field_meta = field.meta();
+
+    if (field_meta->is_expr()){
+      Expression *expr = nullptr;
+      expr = ComplexExpr::create_complex_expr(field_meta->name(), table_map, tables[0], expr_aggr, attr_offset);
+
+      query_exprs.push_back(expr);
+    } else {
+      query_exprs.push_back(new FieldExpr(table, field_meta));
+    }
+  }
+  // 若expression里存在聚合，此处补上
+  for (Field field : expr_aggr) {
+    query_fields.push_back(field);
+  }
+
   LOG_INFO("got %d tables in from stmt and %d fields in query stmt", tables.size(), query_fields.size());
 
   // collect order fields in `Order By` statement
@@ -80,6 +101,14 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   rc = create_filter_for_where_stmt(db, select_sql, tables, table_map, reserved_filter_stmt, push_down_filter_stmts);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to collect tables in where statement");
+    return rc;
+  }
+
+  // 此处创建expression相关conds列表 (default_table默认tables[0])
+  FilterStmt *expr_stmt = nullptr;
+  rc = FilterStmt::create(db, tables[0], &table_map, select_sql.expr_conds, select_sql.expr_cond_num, expr_stmt);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("cannot construct join filter stmt");
     return rc;
   }
 
@@ -107,13 +136,16 @@ RC SelectStmt::create(Db *db, const Selects &select_sql, Stmt *&stmt)
   SelectStmt *select_stmt = new SelectStmt();
   select_stmt->tables_.swap(tables);
   select_stmt->query_fields_.swap(query_fields);
+  select_stmt->query_exprs_.swap(query_exprs);
   select_stmt->order_fields_.swap(order_fields);
   select_stmt->filter_stmt_ = reserved_filter_stmt;
   select_stmt->push_down_filter_stmts_.swap(push_down_filter_stmts);
   select_stmt->join_keys_ = join_keys;
   select_stmt->do_aggr_ = select_sql.is_aggr;  // 告知执行器生成aggregate_operator
+  if (!expr_aggr.empty()) select_stmt->do_aggr_ = true;
   select_stmt->having_stmt_ = having_stmt;
   select_stmt->group_keys_.swap(group_by_keys);
+  select_stmt->expr_stmt_ = expr_stmt;
   stmt = select_stmt;
   return RC::SUCCESS;
 }
@@ -139,7 +171,12 @@ RC collect_rel_attr_into_query_fields(const RelAttr &relation_attr, Db *db, cons
         attr_offset,
         query_fields,
         visible);
-  } else {
+  } else if (relation_attr.is_complex) { // select expression from t, 这种情况下relation_name为空，expression存放在attribute_name
+      FieldMeta *field_meta = new FieldMeta;
+      field_meta->init(relation_attr.attribute_name, FLOATS, attr_offset, sizeof(float), true, /* nullable */false);
+      field_meta->set_expr();
+      query_fields.push_back(Field(nullptr, field_meta, NOT_AGGR, nullptr));
+    } else {
     rc = process_simple_attr(select_sql, relation_attr, tables, group_by_keys, attr_offset, query_fields, visible);
   }
 

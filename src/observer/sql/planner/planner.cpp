@@ -54,6 +54,9 @@ RC Planner::create_select_plan(SelectStmt *select_stmt, Operator *&root)
     top_pred_oper->add_child(scan_oper);
   }
 
+  PredicateOperator *expr_pred_oper = new PredicateOperator(select_stmt->expr_stmt());
+  expr_pred_oper->add_child(top_pred_oper);
+
   OrderOperator *order_oper = new OrderOperator(select_stmt->order_fields());
 
   ProjectOperator *project_oper = new ProjectOperator();
@@ -61,10 +64,10 @@ RC Planner::create_select_plan(SelectStmt *select_stmt, Operator *&root)
   if (select_stmt->do_aggregate()) {
     HashAggregateOperator *aggregate_oper =
         new HashAggregateOperator(select_stmt->query_fields(), select_stmt->group_keys(), select_stmt->having_stmt());
-    aggregate_oper->add_child(top_pred_oper);
+    aggregate_oper->add_child(expr_pred_oper);
     order_oper->add_child(aggregate_oper);
   } else {
-    order_oper->add_child(top_pred_oper);
+    order_oper->add_child(expr_pred_oper);
   }
 
   project_oper->add_child(order_oper);
@@ -73,9 +76,11 @@ RC Planner::create_select_plan(SelectStmt *select_stmt, Operator *&root)
   bool multi_table = false;
   if (select_stmt->tables().size() > 1)
     multi_table = true;
-  for (const Field &field : select_stmt->query_fields()) {
+  for (int i=0; i<select_stmt->query_exprs().size(); i++) {
+    const Field &field = select_stmt->query_fields()[i];
+    Expression *expr = select_stmt->query_exprs()[i];
     if (field.meta()->visible()) {
-      project_oper->add_projection(field.table(), field.meta(), multi_table);
+      project_oper->add_projection(field.table(), field.meta(), expr, multi_table);
     }
   }
 

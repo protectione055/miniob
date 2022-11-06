@@ -201,6 +201,7 @@ ParserContext *get_context(yyscan_t scanner)
 %token <string> SSS
 %token <string> STAR
 %token <string> STRING_V
+%token <string> EXPRESSION
 %token <number> MIN_AGGR
 %token <number> MAX_AGGR
 %token <number> COUNT_AGGR
@@ -549,6 +550,12 @@ select_attr:
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 			CONTEXT->ssql->sstr.selection.is_aggr = 1;
 	}
+	| EXPRESSION attr_list {
+			RelAttr attr;
+			relation_attr_init(&attr, NULL, $1);
+			attr.is_complex = 1;
+			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+		}
     ;
 aggregate:
       MIN_AGGR {$$ = MIN;}
@@ -599,6 +606,12 @@ attr_list:
 			CONTEXT->ssql->sstr.selection.is_aggr = 1;
      	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
+      }
+	| COMMA EXPRESSION attr_list {
+			RelAttr attr;
+			relation_attr_init(&attr, NULL, $2);
+			attr.is_complex = 1;
+			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
       }
   	;
 group_by:
@@ -945,6 +958,99 @@ condition:
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		free(right_subquery);
 	}
+	|value comOp EXPRESSION 
+		{
+			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 1];
+			
+			RelAttr right_attr;
+			relation_attr_init(&right_attr, NULL, $3);
+			right_attr.is_complex = 1;
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 1, &right_attr, NULL);
+			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
+		}
+    |EXPRESSION comOp value 
+		{
+			RelAttr left_attr;
+			relation_attr_init(&left_attr, NULL, $1);
+			left_attr.is_complex = 1;
+
+			Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, right_value);
+			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
+
+		}
+	|ID comOp EXPRESSION 
+		{
+			RelAttr left_attr;
+			relation_attr_init(&left_attr, NULL, $1);
+
+			RelAttr right_attr;
+			relation_attr_init(&right_attr, NULL, $3);
+			right_attr.is_complex = 1;
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
+
+		}
+    |EXPRESSION comOp ID
+		{
+			RelAttr left_attr;
+			relation_attr_init(&left_attr, NULL, $1);
+			left_attr.is_complex = 1;
+
+			RelAttr right_attr;
+			relation_attr_init(&right_attr, NULL, $3);
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
+		}
+    |ID DOT ID comOp EXPRESSION
+		{
+			RelAttr left_attr;
+			relation_attr_init(&left_attr, $1, $3);
+
+			RelAttr right_attr;
+			relation_attr_init(&right_attr, NULL, $5);
+			right_attr.is_complex = 1;
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
+    	}
+    |EXPRESSION comOp ID DOT ID
+		{
+			RelAttr left_attr;
+			relation_attr_init(&left_attr, NULL, $1);
+			left_attr.is_complex = 1;
+
+			RelAttr right_attr;
+			relation_attr_init(&right_attr, $3, $5);
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);			
+    	}
+    |EXPRESSION comOp EXPRESSION
+		{
+			RelAttr left_attr;
+			relation_attr_init(&left_attr, NULL, $1);
+			left_attr.is_complex = 1;
+
+			RelAttr right_attr;
+			relation_attr_init(&right_attr, NULL, $3);
+			right_attr.is_complex = 1;
+
+			Condition condition;
+			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
+			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
+    	}
+
     ;
 sub_query:
     sub_query_init select_attr FROM ID rel_list where group_by having RBRACE {

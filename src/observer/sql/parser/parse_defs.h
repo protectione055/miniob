@@ -38,8 +38,15 @@ typedef enum {
 typedef struct {
   char *relation_name;   // relation name (may be NULL) 表名
   char *attribute_name;  // attribute name              属性名
-  AggrType aggr_type;    // aggregate type				聚合类型
+  AggrType aggr_type;    // aggregate type				      聚合类型
+  int   is_complex;      // is_complex				          判断是否为表达式
+  char *alias;           // alias                       别名
 } RelAttr;
+
+typedef struct {
+  char *relation_name;   // relation name (may be NULL) 表名
+  char *alias;           // alias                       别名
+} Relation;
 
 typedef struct {
   char *relation_name;   // relation name (may be NULL) 表名
@@ -66,6 +73,15 @@ typedef enum {
   NOT_EXISTS,
   NO_OP
 } CompOp;
+
+//Expression 运算符
+typedef enum {
+  PLUS,     //"+"     0
+  MINUS,   //"="    1
+  MULTIPLY,    //"*"    2
+  DIVIDE,    //"/"     3
+  NO_MATHOP
+} MathOp;
 
 //属性值类型
 typedef enum {
@@ -112,7 +128,7 @@ typedef struct {
   size_t attr_num;                // Length of attrs in Select clause
   RelAttr attributes[MAX_NUM];    // attrs in Select clause
   size_t relation_num;            // Length of relations in From clause
-  char *relations[MAX_NUM];       // relations in From clause
+  Relation relations[MAX_NUM];       // relations in From clause
   size_t join_cond_num;           // Length of join conditions in Fro clause
   Condition join_conds[MAX_NUM];  // join conditions in Fro clause
   CondMode condition_mode;        // mode of filter stmt, only support all `or` & `and`
@@ -124,6 +140,8 @@ typedef struct {
   RelAttr group_by_keys[MAX_NUM];            // attr in group by clause
   Condition having_conditions[MAX_NUM];  // having clause for aggregation
   size_t having_condition_num;           // Length of conditions in having clause
+  size_t expr_cond_num;           // Length of join conditions in Fro clause
+  Condition expr_conds[MAX_NUM];  // join conditions in Fro clause
 } Selects;
 
 // struct of insert
@@ -247,7 +265,7 @@ typedef struct Query {
 extern "C" {
 #endif  // __cplusplus
 
-void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const char *attribute_name);
+void relation_attr_init(RelAttr *relation_attr, const char *relation_name, const char *attribute_name, const char *alias);
 void relation_attr_destroy(RelAttr *relation_attr);
 
 void order_attr_init(OrderAttr *order_attr, const char *relation_name, const char *attribute_name, const int is_asc);
@@ -270,8 +288,9 @@ void attr_info_destroy(AttrInfo *attr_info);
 
 void selects_init(Selects *selects, ...);
 void selects_append_attribute(Selects *selects, RelAttr *rel_attr);
-void selects_append_relation(Selects *selects, const char *relation_name);
+void selects_append_relation(Selects *selects, const char *relation_name, const char *alias);
 void selects_append_joincond(Selects *selects, Condition condition);
+void selects_append_exprcond(Selects *selects, Condition condition);
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num);
 void selects_append_orders(Selects *selects, OrderAttr *order_attr);
 void subquery_create_value_list(Value dst[], Value src[], size_t value_num);

@@ -110,6 +110,7 @@ QUOTE            [\'\"]
 ">="                                                 RETURN_TOKEN(GE);
 ">"                                                  RETURN_TOKEN(GT);
 {QUOTE}[\0-\46\50-\177]*{QUOTE}            yylval->string=strdup(yytext); RETURN_TOKEN(SSS);
+([\-]?[\+\-\*\/\(\)A-Za-z0-9\._]+[\+\-\*/]+[A-Za-z0-9\._]+[\(\)A-Za-z0-9\.\+\-\*/_]*)|(\-+[\(\)A-Za-z0-9\._]+) yylval->string=strdup(yytext);RETURN_TOKEN(EXPRESSION);
 
 .                                                    printf("Unknown character [%c]\n",yytext[0]); return yytext[0];
 %%
