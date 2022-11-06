@@ -117,10 +117,10 @@ const char **BplusTreeIndex::generate_keys_from_record(const char *record) {
   return res;
 }
 
-RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
+RC BplusTreeIndex::insert_entry(const char *record, const RID *rid, bool skip_uniquecheck)
 {
   const char **user_keys = generate_keys_from_record(record);
-  RC rc = index_handler_.insert_entry(user_keys, rid, index_meta_.unique());
+  RC rc = index_handler_.insert_entry(user_keys, rid, skip_uniquecheck?false:index_meta_.unique());
   delete[] user_keys;
   return rc;
 }

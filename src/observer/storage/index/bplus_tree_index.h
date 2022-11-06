@@ -28,7 +28,7 @@ public:
   RC drop() override;
   RC close();
 
-  RC insert_entry(const char *record, const RID *rid) override;
+  RC insert_entry(const char *record, const RID *rid, bool skip_uniquecheck) override;
   RC delete_entry(const char *record, const RID *rid) override;
 
   /**

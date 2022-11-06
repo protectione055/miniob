@@ -595,7 +595,7 @@ public:
 
   RC insert_index(const Record *record)
   {
-    return index_->insert_entry(record->data(), &record->rid());
+    return index_->insert_entry(record->data(), &record->rid(), false);
   }
 
 private:
@@ -928,9 +928,19 @@ RC Table::rollback_delete(Trx *trx, const RID &rid)
 
 RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
 {
+  Record r;
+  RowTuple tuple;
+  r.set_data((char*)record); // pretty promise we would not modify data
+  tuple.set_record(&r);
+  tuple.set_schema(this, table_meta_.field_metas());
+
+  bool has_null = false;
+  for(int i=table_meta_.sys_field_num();i<table_meta_.field_num();i++) {
+    if(tuple.is_null_at(i)) has_null = true;
+  }
   RC rc = RC::SUCCESS;
   for (Index *index : indexes_) {
-    rc = index->insert_entry(record, &rid);
+    rc = index->insert_entry(record, &rid, has_null);
     if (rc != RC::SUCCESS) {
       break;
     }

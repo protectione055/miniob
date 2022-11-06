@@ -50,7 +50,7 @@ public:
 
   virtual RC drop() = 0;
 
-  virtual RC insert_entry(const char *record, const RID *rid) = 0;
+  virtual RC insert_entry(const char *record, const RID *rid, bool skip_uniquecheck) = 0;
   virtual RC delete_entry(const char *record, const RID *rid) = 0;
 
   virtual IndexScanner *create_scanner(const char *left_keys[], const int left_lens[], bool left_inclusive,
