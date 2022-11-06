@@ -121,34 +121,34 @@ private:
   std::map<std::string, std::string> table_name_alias_map_;
 };
 
-RC collect_rel_attr_into_query_fields(const RelAttr &relation_attr, Db *db, const Selects &select_sql,
-    std::vector<Table *> tables, std::unordered_map<std::string, Table *> table_map, size_t &attr_offset,
-    std::vector<Field> group_by_keys, std::vector<Field> &query_fields, bool visible = true);
-RC process_attr_with_star(const Selects &select_sql, const RelAttr &relation_attr, size_t &attr_offset,
-    const std::vector<Table *> &tables, std::vector<Field> &group_by_keys, std::vector<Field> &query_fields,
-    bool visible);
-RC process_attr_with_dot(const Selects &select_sql, const RelAttr &relation_attr, std::vector<Table *> &tables,
-    std::unordered_map<std::string, Table *> &table_map, const char *table_name, const char *field_name,
-    std::vector<Field> &group_by_keys, size_t &attr_offset, std::vector<Field> &query_fields, bool visible);
-RC process_simple_attr(const Selects &select_sql, const RelAttr &relation_attr, const std::vector<Table *> &tables,
-    std::vector<Field> &group_by_keys, size_t &attr_offset, std::vector<Field> &query_fields, bool visible);
-RC find_table_by_attr_name(const std::vector<Table *> &tables, Table *&table, const RelAttr &rel_attr);
-RC check_field_in_group(bool is_aggr, const FieldMeta *field_meta, const std::vector<Field> &group_by_keys);
-RC wildcard_fields(Table *table, std::vector<Field> &field_metas, bool is_aggr, std::vector<Field> &group_by_keys,
-    size_t &attr_offset, const char *alias);
-RC create_query_field(Table *table, const Selects &select_sql, const FieldMeta *field_meta,
-    const RelAttr &relation_attr, std::vector<Field> &group_by_keys, size_t &attr_offset,
-    std::vector<Field> &query_fields, bool visible);
-RC collect_tables_in_from_statement(Db *db, const Selects &select_sql, std::vector<Table *> &tables,
-    std::unordered_map<std::string, Table *> &table_map);
-RC collect_fields_in_orderby_stmt(Db *db, const Selects &select_sql, std::vector<Table *> &tables,
-    std::unordered_map<std::string, Table *> &table_map, std::vector<std::tuple<FieldExpr, int>> &order_fields);
-RC create_filter_for_where_stmt(Db *db, const Selects &select_sql, std::vector<Table *> &tables,
-    std::unordered_map<std::string, Table *> &table_map, FilterStmt *&reserved_filter_stmt,
-    std::vector<FilterStmt *> &push_down_filter_stmts);
-RC collect_groupby_keys(Db *db, const Selects &select_sql, std::vector<Table *> &tables,
-    std::unordered_map<std::string, Table *> &table_map, std::vector<Field> &group_by_keys);
+bool find_rel_attr(const RelAttr *rel_attr_collection, RelAttr target_rel_attr, size_t collections_size);
 RC init_and_create_having_stmt(Db *db, const Selects &select_sql, const std::vector<Table *> &tables,
     const std::unordered_map<std::string, Table *> &table_map, std::vector<Field> &group_by_keys,
     std::vector<Field> &query_fields, size_t &attr_offset, HavingStmt *&having_stmt);
-bool find_rel_attr(const RelAttr *rel_attr_collection, RelAttr target_rel_attr, size_t collections_size);
+RC collect_groupby_keys(Db *db, const Selects &select_sql, std::vector<Table *> &tables,
+    std::unordered_map<std::string, Table *> &table_map, std::vector<Field> &group_by_keys);
+RC create_filter_for_where_stmt(Db *db, const Selects &select_sql, std::vector<Table *> &tables,
+    std::unordered_map<std::string, Table *> &table_map, FilterStmt *&reserved_filter_stmt,
+    std::vector<FilterStmt *> &push_down_filter_stmts);
+RC collect_fields_in_orderby_stmt(Db *db, const Selects &select_sql, std::vector<Table *> &tables,
+    std::unordered_map<std::string, Table *> &table_map, std::vector<std::tuple<FieldExpr, int>> &order_fields);
+RC collect_tables_in_from_statement(Db *db, const Selects &select_sql, std::vector<Table *> &tables,
+    std::unordered_map<std::string, Table *> &table_map, std::map<std::string, std::string> &alias_map);
+RC create_query_field(Table *table, const Selects &select_sql, const FieldMeta *field_meta,
+    const RelAttr &relation_attr, std::vector<Field> &group_by_keys, size_t &attr_offset,
+    std::vector<Field> &query_fields, bool visible);
+RC wildcard_fields(Table *table, std::vector<Field> &field_metas, bool is_aggr, std::vector<Field> &group_by_keys,
+    size_t &attr_offset, const char *alias);
+RC check_field_in_group(bool is_aggr, const FieldMeta *field_meta, const std::vector<Field> &group_by_keys);
+RC find_table_by_attr_name(const std::vector<Table *> &tables, Table *&table, const RelAttr &rel_attr);
+RC process_simple_attr(const Selects &select_sql, const RelAttr &relation_attr, const std::vector<Table *> &tables,
+    std::vector<Field> &group_by_keys, size_t &attr_offset, std::vector<Field> &query_fields, bool visible);
+RC process_attr_with_dot(const Selects &select_sql, const RelAttr &relation_attr, std::vector<Table *> &tables,
+    std::unordered_map<std::string, Table *> &table_map, const char *table_name, const char *field_name,
+    std::vector<Field> &group_by_keys, size_t &attr_offset, std::vector<Field> &query_fields, bool visible);
+RC process_attr_with_star(const Selects &select_sql, const RelAttr &relation_attr, size_t &attr_offset,
+    const std::vector<Table *> &tables, std::vector<Field> &group_by_keys, std::vector<Field> &query_fields,
+    bool visible);
+RC collect_rel_attr_into_query_fields(const RelAttr &relation_attr, Db *db, const Selects &select_sql,
+    std::vector<Table *> tables, std::unordered_map<std::string, Table *> table_map, size_t &attr_offset,
+    std::vector<Field> group_by_keys, std::vector<Field> &query_fields, bool visible = false);
