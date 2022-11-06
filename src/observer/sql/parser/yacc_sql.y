@@ -182,6 +182,7 @@ ParserContext *get_context(yyscan_t scanner)
 		IS
 		IN_TOKEN
 		EXISTS_TOKEN
+		AS
 
 %union {
   struct _Attr *attr;
@@ -214,6 +215,7 @@ ParserContext *get_context(yyscan_t scanner)
 %type <value1> value;
 %type <number> number;
 %type <number> aggregate;
+%type <string> alias;
 %type <number> order_type;
 %type <number> nullable;
 %type <query> sub_query
@@ -485,10 +487,10 @@ update_attr:
 update_attr_list:
 	/* empty */ | COMMA update_attr update_attr_list {}
 select:				/*  select 语句的语法解析树*/
-    SELECT select_attr FROM ID rel_list where order group_by having SEMICOLON
+    SELECT select_attr FROM ID alias rel_list where order group_by having SEMICOLON
 		{
 			// CONTEXT->ssql->sstr.selection.relations[CONTEXT->from_length++]=$4;
-			selects_append_relation(&CONTEXT->ssql->sstr.selection, $4);
+			selects_append_relation(&CONTEXT->ssql->sstr.selection, $4, $5);
 
 			selects_append_conditions(&CONTEXT->ssql->sstr.selection, CONTEXT->conditions, CONTEXT->condition_length);
 
@@ -507,52 +509,52 @@ select:				/*  select 语句的语法解析树*/
 	;
 
 select_attr:
-    STAR attr_list {  
+    STAR alias attr_list {  
 			RelAttr attr;
-			relation_attr_init(&attr, NULL, "*");
+			relation_attr_init(&attr, NULL, "*", $2);
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 		}
-    | ID attr_list {
+    | ID alias attr_list {
 			RelAttr attr;
-			relation_attr_init(&attr, NULL, $1);
+			relation_attr_init(&attr, NULL, $1, $2);
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 		}
-  	| ID DOT ID attr_list {
+  	| ID DOT ID alias attr_list {
 			RelAttr attr;
-			relation_attr_init(&attr, $1, $3);
+			relation_attr_init(&attr, $1, $3, $4);
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 		}
-	| aggregate LBRACE STAR RBRACE attr_list {
+	| aggregate LBRACE STAR RBRACE alias attr_list {
 			RelAttr attr;
-			relation_attr_init(&attr, NULL, "*");
+			relation_attr_init(&attr, NULL, "*", $5);
 			attr.aggr_type = $1;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 			CONTEXT->ssql->sstr.selection.is_aggr = 1;
 	}
-	| aggregate LBRACE ID DOT STAR RBRACE attr_list {
+	| aggregate LBRACE ID DOT STAR RBRACE alias attr_list {
 			RelAttr attr;
-			relation_attr_init(&attr, $3, "*");
+			relation_attr_init(&attr, $3, "*", $7);
 			attr.aggr_type = $1;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 			CONTEXT->ssql->sstr.selection.is_aggr = 1;
 	}
-	| aggregate LBRACE ID RBRACE attr_list {
+	| aggregate LBRACE ID RBRACE alias attr_list {
 			RelAttr attr;
-			relation_attr_init(&attr, NULL, $3);
+			relation_attr_init(&attr, NULL, $3, $5);
 			attr.aggr_type = $1;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 			CONTEXT->ssql->sstr.selection.is_aggr = 1;
 	}
-	| aggregate LBRACE ID DOT ID RBRACE attr_list {
+	| aggregate LBRACE ID DOT ID RBRACE alias attr_list {
 			RelAttr attr;
-			relation_attr_init(&attr, $3, $5);
+			relation_attr_init(&attr, $3, $5, $7);
 			attr.aggr_type = $1;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 			CONTEXT->ssql->sstr.selection.is_aggr = 1;
 	}
-	| EXPRESSION attr_list {
+	| EXPRESSION alias attr_list {
 			RelAttr attr;
-			relation_attr_init(&attr, NULL, $1);
+			relation_attr_init(&attr, NULL, $1, $2);
 			attr.is_complex = 1;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 		}
@@ -566,78 +568,82 @@ aggregate:
 	;
 attr_list:
     /* empty */
-    | COMMA ID attr_list {
+    | COMMA ID alias attr_list {
 			RelAttr attr;
-			relation_attr_init(&attr, NULL, $2);
+			relation_attr_init(&attr, NULL, $2, $3);
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
      	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
       }
-    | COMMA ID DOT ID attr_list {
+    | COMMA ID DOT ID alias attr_list {
 			RelAttr attr;
-			relation_attr_init(&attr, $2, $4);
+			relation_attr_init(&attr, $2, $4, $5);
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].attribute_name=$4;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].relation_name=$2;
   	  }
-	| COMMA aggregate LBRACE STAR RBRACE attr_list {
+	| COMMA aggregate LBRACE STAR RBRACE alias attr_list {
 			RelAttr attr;
-			relation_attr_init(&attr, NULL, "*");
+			relation_attr_init(&attr, NULL, "*", $6);
 			attr.aggr_type = $2;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 			CONTEXT->ssql->sstr.selection.is_aggr = 1;
      	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
       }
-	| COMMA aggregate LBRACE ID RBRACE attr_list {
+	| COMMA aggregate LBRACE ID RBRACE alias attr_list {
 			RelAttr attr;
-			relation_attr_init(&attr, NULL, $4);
+			relation_attr_init(&attr, NULL, $4, $6);
 			attr.aggr_type = $2;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 			CONTEXT->ssql->sstr.selection.is_aggr = 1;
      	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
       }
-	| COMMA aggregate LBRACE ID DOT ID RBRACE attr_list {
+	| COMMA aggregate LBRACE ID DOT ID RBRACE alias attr_list {
 			RelAttr attr;
-			relation_attr_init(&attr, $4, $6);
+			relation_attr_init(&attr, $4, $6, $8);
 			attr.aggr_type = $2;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 			CONTEXT->ssql->sstr.selection.is_aggr = 1;
      	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
       }
-	| COMMA EXPRESSION attr_list {
+	| COMMA EXPRESSION alias attr_list {
 			RelAttr attr;
-			relation_attr_init(&attr, NULL, $2);
+			relation_attr_init(&attr, NULL, $2, $3);
 			attr.is_complex = 1;
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
       }
   	;
+alias:
+    /* empty */ {$$ = "";}
+	| AS ID {$$ = $2;}
+	;
 group_by:
-    | GROUP BY ID group_key_list {
+    | GROUP BY ID alias group_key_list {
 			RelAttr attr;
-			relation_attr_init(&attr, NULL, $3);
+			relation_attr_init(&attr, NULL, $3, $4);
 			selects_append_groupkey(&CONTEXT->ssql->sstr.selection, &attr);
 	}
-	| GROUP BY ID DOT ID group_key_list {
+	| GROUP BY ID DOT ID alias group_key_list {
 			RelAttr attr;
-			relation_attr_init(&attr, $3, $5);
+			relation_attr_init(&attr, $3, $5, $6);
 			selects_append_groupkey(&CONTEXT->ssql->sstr.selection, &attr);
 	}
 	;
 group_key_list:
     /* empty */
-    | COMMA ID group_key_list {
+    | COMMA ID alias group_key_list {
 			RelAttr attr;
-			relation_attr_init(&attr, NULL, $2);
+			relation_attr_init(&attr, NULL, $2, $3);
 			selects_append_groupkey(&CONTEXT->ssql->sstr.selection, &attr);
      	  // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].relation_name = NULL;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].attribute_name=$2;
       }
-    | COMMA ID DOT ID group_key_list {
+    | COMMA ID DOT ID alias group_key_list {
 			RelAttr attr;
-			relation_attr_init(&attr, $2, $4);
+			relation_attr_init(&attr, $2, $4, $5);
 			selects_append_groupkey(&CONTEXT->ssql->sstr.selection, &attr);
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].attribute_name=$4;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].relation_name=$2;
@@ -645,18 +651,12 @@ group_key_list:
 	;
 rel_list:
     /* empty */
-    | COMMA ID rel_list {	
-				selects_append_relation(&CONTEXT->ssql->sstr.selection, $2);
+    | COMMA ID alias rel_list {	
+				selects_append_relation(&CONTEXT->ssql->sstr.selection, $2, $3);
 		  }
-    | INNER JOIN ID ON join_cond join_cond_list join_list {	
-		selects_append_relation(&CONTEXT->ssql->sstr.selection, $3);
+    | INNER JOIN ID alias ON join_cond join_cond_list rel_list {	
+		selects_append_relation(&CONTEXT->ssql->sstr.selection, $3, $4);
 	}
-    ;
-join_list:
-    /* empty */
-    | INNER JOIN ID ON join_cond join_cond_list join_list {	
-				selects_append_relation(&CONTEXT->ssql->sstr.selection, $3);
-		  }
     ;
 join_cond_list:
     /* empty */
@@ -674,36 +674,36 @@ join_cond:
 			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 0, NULL, right_value);
 			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		}
-    |ID DOT ID comOp value
+    |ID DOT ID alias comOp value
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, $1, $3);
+			relation_attr_init(&left_attr, $1, $3, $4);
 			Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, right_value);
 			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
     	}
-    |value comOp ID DOT ID
+    |value comOp ID DOT ID alias
 		{
 			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 1];
 
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, $3, $5);
+			relation_attr_init(&right_attr, $3, $5, $6);
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 1, &right_attr, NULL);
 			CONTEXT->conditions[CONTEXT->condition_length++] = condition;		
     	}
-    |ID DOT ID comOp ID DOT ID
+    |ID DOT ID alias comOp ID DOT ID alias
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, $1, $3);
+			relation_attr_init(&left_attr, $1, $3, $4);
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, $5, $7);
+			relation_attr_init(&right_attr, $6, $8, $9);
 
 			// 判断是否同一表中的两个属性。若否，条件加入join中
-			if (strcmp($1, $5) != 0){
+			if (strcmp($1, $6) != 0){
 				Condition condition;
 				condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
 				selects_append_joincond(&CONTEXT->ssql->sstr.selection, condition);
@@ -730,10 +730,10 @@ condition_list:
 			}
     ;
 condition:
-    ID comOp value 
+    ID alias comOp value 
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, NULL, $1);
+			relation_attr_init(&left_attr, NULL, $1, $2);
 
 			Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
 
@@ -771,12 +771,12 @@ condition:
 			// $$->right_value = *$3;
 
 		}
-		|ID comOp ID 
+		|ID alias comOp ID alias
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, NULL, $1);
+			relation_attr_init(&left_attr, NULL, $1, $2);
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, NULL, $3);
+			relation_attr_init(&right_attr, NULL, $4, $5);
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
@@ -791,11 +791,11 @@ condition:
 			// $$->right_attr.attribute_name=$3;
 
 		}
-    |value comOp ID
+    |value comOp ID alias
 		{
 			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 1];
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, NULL, $3);
+			relation_attr_init(&right_attr, NULL, $3, $4);
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 1, &right_attr, NULL);
@@ -813,10 +813,10 @@ condition:
 			// $$->right_attr.attribute_name=$3;
 		
 		}
-    |ID DOT ID comOp value
+    |ID DOT ID alias comOp value
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, $1, $3);
+			relation_attr_init(&left_attr, $1, $3, $4);
 			Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
 
 			Condition condition;
@@ -834,12 +834,12 @@ condition:
 			// $$->right_value =*$5;			
 							
     	}
-    |value comOp ID DOT ID
+    |value comOp ID DOT ID alias
 		{
 			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 1];
 
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, $3, $5);
+			relation_attr_init(&right_attr, $3, $5, $6);
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 1, &right_attr, NULL);
@@ -855,15 +855,15 @@ condition:
 			// $$->right_attr.attribute_name = $5;
 									
     	}
-    |ID DOT ID comOp ID DOT ID
+    |ID DOT ID alias comOp ID DOT ID alias
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, $1, $3);
+			relation_attr_init(&left_attr, $1, $3, $4);
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, $5, $7);
+			relation_attr_init(&right_attr, $6, $8, $9);
 
 			// 判断是否同一表中的两个属性。若否，条件加入join中
-			// if (strcmp($1, $5) != 0){
+			// if (strcmp($1, $6) != 0){
 			// 	Condition condition;
 			// 	condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
 			// 	selects_append_joincond(&CONTEXT->ssql->sstr.selection, condition);
@@ -873,32 +873,32 @@ condition:
 				CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 			// }
     	}
-	| ID comOp sub_query
+	| ID alias comOp sub_query
 	{
 		RelAttr left_attr;
-		relation_attr_init(&left_attr, NULL, $1);
-		Query *right_subquery = $3;
+		relation_attr_init(&left_attr, NULL, $1, $2);
+		Query *right_subquery = $4;
 
 		Condition condition;
 		condition_init_with_subquery(&condition, CONTEXT->comp, ATTR, &left_attr, NULL, NULL, SUB_QUERY, NULL, NULL, &right_subquery->sstr.selection);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		free(right_subquery);
 	}
-	| ID DOT ID comOp sub_query
+	| ID DOT ID alias comOp sub_query
 	{
 		RelAttr left_attr;
-		relation_attr_init(&left_attr, $1, $3);
-		Query *right_subquery = $5;
+		relation_attr_init(&left_attr, $1, $3, $4);
+		Query *right_subquery = $6;
 
 		Condition condition;
 		condition_init_with_subquery(&condition, CONTEXT->comp, ATTR, &left_attr, NULL, NULL, SUB_QUERY, NULL, NULL, &right_subquery->sstr.selection);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		free(right_subquery);
 	}
-	| sub_query comOp ID
+	| sub_query comOp ID alias
 	{
 		RelAttr right_attr;
-		relation_attr_init(&right_attr, NULL, $3);
+		relation_attr_init(&right_attr, NULL, $3, $4);
 		Query *left_subquery = $1;
 
 		Condition condition;
@@ -908,10 +908,10 @@ condition:
 		free(left_subquery);
 		printf("2condition_length=%d\n", CONTEXT->condition_length);
 	}
-	| sub_query comOp ID DOT ID
+	| sub_query comOp ID DOT ID alias
 	{
 		RelAttr right_attr;
-		relation_attr_init(&right_attr, $3, $5);
+		relation_attr_init(&right_attr, $3, $5, $6);
 		Query *left_subquery = $1;
 		
 		Condition condition;
@@ -932,18 +932,18 @@ condition:
 		free(right_subquery);
 		printf("s op s condition_length=%d\n", CONTEXT->condition_length);
 	}
-	| ID comOp subquery_value_list{
+	| ID alias comOp subquery_value_list{
 		RelAttr left_attr;
-		relation_attr_init(&left_attr, NULL, $1);
+		relation_attr_init(&left_attr, NULL, $1, $2);
 
 		Condition condition;
 		condition_init_with_value_list(&condition, CONTEXT->comp, ATTR, &left_attr, NULL, CONTEXT->value_list, CONTEXT->value_list_length);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		CONTEXT->value_list_length = 0;
 	}
-	| ID DOT ID comOp subquery_value_list{
+	| ID DOT ID alias comOp subquery_value_list{
 		RelAttr left_attr;
-		relation_attr_init(&left_attr, $1, $3);
+		relation_attr_init(&left_attr, $1, $3, $4);
 
 		Condition condition;
 		condition_init_with_value_list(&condition, CONTEXT->comp, ATTR, &left_attr, NULL, CONTEXT->value_list, CONTEXT->value_list_length);
@@ -958,22 +958,22 @@ condition:
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		free(right_subquery);
 	}
-	|value comOp EXPRESSION 
+	|value comOp EXPRESSION alias
 		{
 			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 1];
 			
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, NULL, $3);
+			relation_attr_init(&right_attr, NULL, $3, $4);
 			right_attr.is_complex = 1;
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 1, &right_attr, NULL);
 			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
 		}
-    |EXPRESSION comOp value 
+    |EXPRESSION alias comOp value 
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, NULL, $1);
+			relation_attr_init(&left_attr, NULL, $1, $2);
 			left_attr.is_complex = 1;
 
 			Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
@@ -983,13 +983,13 @@ condition:
 			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
 
 		}
-	|ID comOp EXPRESSION 
+	|ID alias comOp EXPRESSION alias
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, NULL, $1);
+			relation_attr_init(&left_attr, NULL, $1, $2);
 
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, NULL, $3);
+			relation_attr_init(&right_attr, NULL, $4, $5);
 			right_attr.is_complex = 1;
 
 			Condition condition;
@@ -997,53 +997,53 @@ condition:
 			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
 
 		}
-    |EXPRESSION comOp ID
+    |EXPRESSION alias comOp ID alias
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, NULL, $1);
+			relation_attr_init(&left_attr, NULL, $1, $2);
 			left_attr.is_complex = 1;
 
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, NULL, $3);
+			relation_attr_init(&right_attr, NULL, $4, $5);
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
 			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
 		}
-    |ID DOT ID comOp EXPRESSION
+    |ID DOT ID alias comOp EXPRESSION alias
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, $1, $3);
+			relation_attr_init(&left_attr, $1, $3, $4);
 
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, NULL, $5);
+			relation_attr_init(&right_attr, NULL, $6, $7);
 			right_attr.is_complex = 1;
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
 			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);
     	}
-    |EXPRESSION comOp ID DOT ID
+    |EXPRESSION alias comOp ID DOT ID alias
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, NULL, $1);
+			relation_attr_init(&left_attr, NULL, $1, $2);
 			left_attr.is_complex = 1;
 
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, $3, $5);
+			relation_attr_init(&right_attr, $4, $6, $7);
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
 			selects_append_exprcond(&CONTEXT->ssql->sstr.selection, condition);			
     	}
-    |EXPRESSION comOp EXPRESSION
+    |EXPRESSION alias comOp EXPRESSION alias
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, NULL, $1);
+			relation_attr_init(&left_attr, NULL, $1, $2);
 			left_attr.is_complex = 1;
 
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, NULL, $3);
+			relation_attr_init(&right_attr, NULL, $4, $5);
 			right_attr.is_complex = 1;
 
 			Condition condition;
@@ -1053,8 +1053,8 @@ condition:
 
     ;
 sub_query:
-    sub_query_init select_attr FROM ID rel_list where group_by having RBRACE {
-		selects_append_relation(&CONTEXT->ssql->sstr.selection, $4);
+    sub_query_init select_attr FROM ID alias rel_list where group_by having RBRACE {
+		selects_append_relation(&CONTEXT->ssql->sstr.selection, $4, $5);
 
 		selects_append_conditions(&CONTEXT->ssql->sstr.selection, CONTEXT->conditions, CONTEXT->condition_length);
 
@@ -1091,10 +1091,10 @@ having_condition_list:
 			}
     ;
 having_condition:
-    aggregate LBRACE STAR RBRACE comOp value 
+    aggregate LBRACE STAR RBRACE alias comOp value 
 	{
 		RelAttr left_attr;
-		relation_attr_init(&left_attr, NULL, "*");
+		relation_attr_init(&left_attr, NULL, "*", $5);
 		left_attr.aggr_type = $1;
 
 		Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
@@ -1103,10 +1103,10 @@ having_condition:
 		condition_init(&having_condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, right_value);
 		CONTEXT->having_conditions[CONTEXT->having_condition_length++] = having_condition;
 	}
-	| aggregate LBRACE ID RBRACE comOp value 
+	| aggregate LBRACE ID RBRACE alias comOp value 
 	{
 		RelAttr left_attr;
-		relation_attr_init(&left_attr, NULL, $3);
+		relation_attr_init(&left_attr, NULL, $3, $5);
 		left_attr.aggr_type = $1;
 
 		Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
@@ -1115,10 +1115,10 @@ having_condition:
 		condition_init(&having_condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, right_value);
 		CONTEXT->having_conditions[CONTEXT->having_condition_length++] = having_condition;
 	}
-	| aggregate LBRACE ID DOT ID RBRACE comOp value 
+	| aggregate LBRACE ID DOT ID RBRACE alias comOp value 
 	{
 		RelAttr left_attr;
-		relation_attr_init(&left_attr, $3, $5);
+		relation_attr_init(&left_attr, $3, $5, $7);
 		left_attr.aggr_type = $1;
 
 		Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
@@ -1127,53 +1127,53 @@ having_condition:
 		condition_init(&having_condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, right_value);
 		CONTEXT->having_conditions[CONTEXT->having_condition_length++] = having_condition;
 	}
-    | aggregate LBRACE ID RBRACE comOp ID
+    | aggregate LBRACE ID RBRACE alias comOp ID alias
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, NULL, $3);
+			relation_attr_init(&left_attr, NULL, $3, $5);
 			left_attr.aggr_type = $1;
 
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, NULL, $6);
+			relation_attr_init(&right_attr, NULL, $7, $8);
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
 			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		}
-	| aggregate LBRACE ID RBRACE comOp ID DOT ID
+	| aggregate LBRACE ID RBRACE alias comOp ID DOT ID alias
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, NULL, $3);
+			relation_attr_init(&left_attr, NULL, $3, $5);
 			left_attr.aggr_type = $1;
 
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, $6, $8);
+			relation_attr_init(&right_attr, $7, $9, $10);
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
 			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 		}
-    | aggregate LBRACE ID DOT ID RBRACE comOp ID
+    | aggregate LBRACE ID DOT ID RBRACE alias comOp ID alias
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, $3, $5);
+			relation_attr_init(&left_attr, $3, $5, $7);
 			left_attr.aggr_type = $1;
 
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, NULL, $8);
+			relation_attr_init(&right_attr, NULL, $9, $10);
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
 			CONTEXT->conditions[CONTEXT->condition_length++] = condition;						
     	}
-    | aggregate LBRACE ID DOT ID RBRACE comOp ID DOT ID
+    | aggregate LBRACE ID DOT ID RBRACE alias comOp ID DOT ID alias
 		{
 			RelAttr left_attr;
-			relation_attr_init(&left_attr, $3, $5);
+			relation_attr_init(&left_attr, $3, $5, $7);
 			left_attr.aggr_type = $1;
 
 			RelAttr right_attr;
-			relation_attr_init(&right_attr, $8, $10);
+			relation_attr_init(&right_attr, $9, $11, $12);
 
 			Condition condition;
 			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
